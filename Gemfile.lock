@@ -341,6 +341,7 @@ DEPENDENCIES
   brakeman
   bundler-audit
   debug
+  dotenv (~> 3.2.0)
   image_processing (~> 1.2)
   kamal
   pg (~> 1.1)
