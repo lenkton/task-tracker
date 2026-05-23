@@ -5,3 +5,27 @@
 %w[todo in_progress done cancelled].each do |status_name|
   Status.find_or_create_by!(name: status_name)
 end
+
+if Rails.env.development?
+  [
+    {
+      name: "Review pull requests",
+      description: "Check open PRs on GitHub",
+      scheduled_at: 1.day.from_now,
+      status_name: "todo"
+    },
+    {
+      name: "Implement task tracker API",
+      description: "Add CRUD endpoints for tasks",
+      scheduled_at: 2.days.from_now,
+      status_name: "in_progress"
+    }
+  ].each do |attrs|
+    status = Status.find_by!(name: attrs[:status_name])
+    Task.find_or_create_by!(name: attrs[:name]) do |task|
+      task.description = attrs[:description]
+      task.scheduled_at = attrs[:scheduled_at]
+      task.status = status
+    end
+  end
+end

@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/23/2026 at 13:20:51 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/23/2026 at 13:37:02 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -35,4 +35,50 @@ end
 ```
 
 Сиды уже прогнаны — в базе есть эти четыре статуса (плюс `new`, если он был создан раньше вручную). Если нужен другой набор (например, `backlog` / `review` вместо `cancelled`), напиши — поправлю.
+
+---
+
+**User**
+
+@db/migrate/20260523102749_create_tasks.rb добавь модель
+
+---
+
+**Cursor**
+
+Добавляю модель `Task` и связь в `Status`.
+
+
+Добавлена модель `Task` и обратная связь в `Status`.
+
+**`app/models/task.rb`**
+- `belongs_to :status`
+- валидации `name` и `scheduled_at` (обязательные поля)
+- `description` не валидируется на presence — в миграции для него задан `default: ""`
+
+**`app/models/status.rb`**
+- `has_many :tasks, dependent: :restrict_with_error` — статус с задачами нельзя удалить без явной обработки
+
+Миграция применена, модель в консоли проходит валидацию.
+
+---
+
+**User**
+
+а добавь для задач пару записей для девелопмент окружения
+
+а добавь для задач пару записей для девелопмент окружения в сиды
+
+---
+
+**Cursor**
+
+В `db/seeds.rb` добавлен блок только для `development`: две задачи с разными статусами, через `find_or_create_by!` по `name` — повторный `db:seed` не создаёт дубликаты.
+
+| Задача | Статус |
+|--------|--------|
+| Review pull requests | `todo` |
+| Implement task tracker API | `in_progress` |
+
+В production и test эти записи не создаются.
 
