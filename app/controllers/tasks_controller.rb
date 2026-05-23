@@ -3,28 +3,30 @@ class TasksController < ApplicationController
 
   def index
     tasks = Task.includes(:status).order(:id)
-    render json: tasks, include: status_json_options
+    render json: TaskSerializer.collection(tasks)
   end
 
   def show
-    render json: @task, include: status_json_options
+    render json: TaskSerializer.call(@task)
   end
 
   def create
-    task = Task.new(task_params)
+    task = Tasks::Write.call(task: Task.new, attributes: task_params)
 
-    if task.save
-      render json: task, include: status_json_options, status: :created
+    if task.persisted?
+      render json: TaskSerializer.call(task), status: :created
     else
       render json: { errors: task.errors }, status: :unprocessable_entity
     end
   end
 
   def update
-    if @task.update(task_params)
-      render json: @task, include: status_json_options
+    task = Tasks::Write.call(task: @task, attributes: task_params)
+
+    if task.errors.empty?
+      render json: TaskSerializer.call(task)
     else
-      render json: { errors: @task.errors }, status: :unprocessable_entity
+      render json: { errors: task.errors }, status: :unprocessable_entity
     end
   end
 
@@ -40,10 +42,6 @@ class TasksController < ApplicationController
   end
 
   def task_params
-    params.require(:task).permit(:name, :description, :scheduled_at, :status_id)
-  end
-
-  def status_json_options
-    { status: { only: %i[ id name ] } }
+    params.permit(:name, :description, :scheduled_at, :status)
   end
 end

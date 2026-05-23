@@ -4,16 +4,13 @@ RSpec.describe "Tasks API", type: :request do
   fixtures :tasks, :statuses
 
   let(:task) { tasks(:one) }
-  let(:status) { statuses(:todo) }
 
   let(:valid_task_params) do
     {
-      task: {
-        name: "Write tests",
-        description: "Cover tasks API",
-        scheduled_at: "2026-05-26T09:00:00Z",
-        status_id: status.id
-      }
+      name: "Write tests",
+      description: "Cover tasks API",
+      scheduled_at: "2026-05-26T09:00:00Z",
+      status: "todo"
     }
   end
 
@@ -31,7 +28,7 @@ RSpec.describe "Tasks API", type: :request do
     it "includes status for review task" do
       review_task = json.find { |item| item["name"] == "Review pull requests" }
 
-      expect(review_task["status"]["name"]).to eq("todo")
+      expect(review_task["status"]).to eq("todo")
     end
   end
 
@@ -42,7 +39,7 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(response).to have_http_status(:ok) }
       it { expect(json["id"]).to eq(task.id) }
       it { expect(json["name"]).to eq("Review pull requests") }
-      it { expect(json["status"]["id"]).to eq(status.id) }
+      it { expect(json["status"]).to eq("todo") }
     end
 
     context "when task is missing" do
@@ -65,12 +62,12 @@ RSpec.describe "Tasks API", type: :request do
 
         it { expect(response).to have_http_status(:created) }
         it { expect(json["name"]).to eq("Write tests") }
-        it { expect(json["status"]["name"]).to eq("todo") }
+        it { expect(json["status"]).to eq("todo") }
       end
     end
 
     context "with invalid params" do
-      let(:invalid_task_params) { { task: { name: "", status_id: status.id } } }
+      let(:invalid_task_params) { { name: "", status: "todo" } }
 
       it "does not create a task" do
         expect {
@@ -85,11 +82,28 @@ RSpec.describe "Tasks API", type: :request do
         it { expect(json["errors"]).to include("name", "scheduled_at") }
       end
     end
+
+    context "with invalid status" do
+      let(:invalid_status_params) { valid_task_params.merge(status: "nonexistent") }
+
+      it "does not create a task" do
+        expect {
+          post tasks_path, params: invalid_status_params, as: :json
+        }.not_to change(Task, :count)
+      end
+
+      context "when submitted" do
+        before { post tasks_path, params: invalid_status_params, as: :json }
+
+        it { expect(response).to have_http_status(:unprocessable_content) }
+        it { expect(json["errors"]).to include("status") }
+      end
+    end
   end
 
   describe "PATCH /tasks/:id" do
     context "with valid params" do
-      before { patch task_path(task), params: { task: { name: "Updated task name" } }, as: :json }
+      before { patch task_path(task), params: { name: "Updated task name" }, as: :json }
 
       it { expect(response).to have_http_status(:ok) }
       it { expect(json["name"]).to eq("Updated task name") }
@@ -97,11 +111,26 @@ RSpec.describe "Tasks API", type: :request do
     end
 
     context "with invalid params" do
-      before { patch task_path(task), params: { task: { name: "" } }, as: :json }
+      before { patch task_path(task), params: { name: "" }, as: :json }
 
       it { expect(response).to have_http_status(:unprocessable_content) }
       it { expect(json["errors"]).to include("name") }
       it { expect(task.reload.name).to eq("Review pull requests") }
+    end
+
+    context "with invalid status" do
+      it "does not update the task status" do
+        patch task_path(task), params: { status: "nonexistent" }, as: :json
+
+        expect(task.reload.status.name).to eq("todo")
+      end
+
+      context "when submitted" do
+        before { patch task_path(task), params: { status: "nonexistent" }, as: :json }
+
+        it { expect(response).to have_http_status(:unprocessable_content) }
+        it { expect(json["errors"]).to include("status") }
+      end
     end
   end
 
