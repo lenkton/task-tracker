@@ -8,3 +8,6 @@ plugins: rubocop-rspec
 # # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
 # Layout/SpaceInsideArrayLiteralBrackets:
 #   Enabled: false
+
+RSpec/NestedGroups:
+  Max: 4

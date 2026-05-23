@@ -1,0 +1,8 @@
+todo:
+  name: todo
+
+in_progress:
+  name: in_progress
+
+done:
+  name: done

@@ -7,6 +7,25 @@
 2. `docker compose up`
 3. Сервер будет доступен на `localhost:3000`
 
+## Тесты
+
+В проекте используется RSpec.
+
+### Запуск
+
+Запустить постгрес:
+```bash
+docker compose -f compose.dev.yml up
+```
+Создать базу данных:
+```bash
+bundle exec rails db:create db:migrate
+```
+Прогнать тесты:
+```bash
+bundle exec rspec
+```
+
 ## Дизайнерские решения
 
 * Сделать статусы табличкой, а не условным enum-ом мне захотелось,
