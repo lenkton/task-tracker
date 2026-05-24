@@ -1,0 +1,11 @@
+reporting:
+  name: отчетность
+
+operations:
+  name: операции
+
+call:
+  name: звонок
+
+custom:
+  name: на выходных

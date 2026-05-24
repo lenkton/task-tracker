@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/24/2026 at 14:43:04 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/24/2026 at 16:36:55 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -877,4 +877,58 @@ end
 - проверки `if tasks` / `task.persisted?` / `task.errors.empty?` в контроллере
 
 56 примеров проходят. Если понравится — можно вынести `render_service_result` в `ApplicationController`, но пока оставил явно в экшенах.
+
+---
+
+**User**
+
+@db/migrate/20260524114941_create_tags.rb  накидай сидов для тегов: "отчетность”, “операции” и “звонок"
+
+---
+
+**Cursor**
+
+В `db/seeds.rb` добавлены идемпотентные сиды для трёх тегов (во всех окружениях, как у статусов):
+
+```ruby
+%w[отчетность операции звонок].each do |tag_name|
+  Tag.find_or_create_by!(name: tag_name)
+end
+```
+
+Повторный `bin/rails db:seed` дубликаты не создаёт.
+
+---
+
+**User**
+
+так, теперь надо запретить удаление из базы данных тегов: отчетность, операции, звонок. и запретить их изменение
+
+---
+
+**Cursor**
+
+Добавляю защиту системных тегов в модели и тесты.
+
+
+Системные теги защищены в модели `Tag`.
+
+### `Tag::SYSTEM_NAMES`
+
+```ruby
+%w[отчетность операции звонок].freeze
+```
+
+Список один — и в сидах (`Tag::SYSTEM_NAMES.each`), и в проверках.
+
+### Поведение
+
+- **`before_update`** — системные теги нельзя менять (`update`/`save` возвращает `false`, в `errors[:base]` — `"system tags cannot be deleted"` / `"system tags cannot be modified"`)
+- **`before_destroy`** — системные теги нельзя удалить (запись остаётся в БД)
+
+Остальные теги по-прежнему можно редактировать и удалять.
+
+### Тесты
+
+`spec/models/tag_spec.rb` — 7 примеров на update/destroy для системных и обычных тегов.
 
