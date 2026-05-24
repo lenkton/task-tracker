@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_23_102749) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_24_115736) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -19,6 +19,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_23_102749) do
     t.string "name", null: false
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_statuses_on_name", unique: true
+  end
+
+  create_table "tags", force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["name"], name: "index_tags_on_name", unique: true
+  end
+
+  create_table "tags_tasks", id: false, force: :cascade do |t|
+    t.bigint "tag_id", null: false
+    t.bigint "task_id", null: false
+    t.index ["tag_id", "task_id"], name: "index_tags_tasks_on_tag_id_and_task_id", unique: true
+    t.index ["task_id", "tag_id"], name: "index_tags_tasks_on_task_id_and_tag_id", unique: true
   end
 
   create_table "tasks", force: :cascade do |t|

@@ -6,6 +6,10 @@
   Status.find_or_create_by!(name: status_name)
 end
 
+%w[отчетность операции звонок].each do |tag_name|
+  Tag.find_or_create_by!(name: tag_name)
+end
+
 if Rails.env.development?
   [
     {
