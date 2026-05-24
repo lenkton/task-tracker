@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/24/2026 at 16:36:55 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/24/2026 at 16:53:44 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -931,4 +931,68 @@ end
 ### Тесты
 
 `spec/models/tag_spec.rb` — 7 примеров на update/destroy для системных и обычных тегов.
+
+---
+
+**User**
+
+так, а сейчас надо добавить API для создания/редактирования тегов. Давай 
+
+---
+
+**Cursor**
+
+Изучаю текущую структуру API и модели тегов.
+
+
+Добавляю REST API для тегов по образцу tasks: сериалайзер, сервис записи, контроллер и request-спеки.
+
+
+Добавлен REST API для тегов по тем же принципам, что и у задач.
+
+### Эндпоинты
+
+| Метод | Путь | Действие |
+|-------|------|----------|
+| `GET` | `/tags` | список |
+| `GET` | `/tags/:id` | один тег |
+| `POST` | `/tags` | создать |
+| `PATCH` | `/tags/:id` | изменить |
+| `DELETE` | `/tags/:id` | удалить |
+
+### Тело запроса (корень, без обёртки)
+
+```json
+{ "name": "срочно" }
+```
+
+### Ответ
+
+```json
+{
+  "id": 1,
+  "name": "срочно",
+  "system": false,
+  "created_at": "...",
+  "updated_at": "..."
+}
+```
+
+`system: true` у «отчетность», «операции», «звонок» — чтобы клиент видел, что их нельзя менять/удалять.
+
+### Реализация
+
+- `TagSerializer` — сериализация
+- `Tags::Write` — create/update через `ServiceResult`
+- `TagsController` — экшены
+- защита системных тегов остаётся в модели (`422` с `errors.base`)
+
+### Примеры
+
+```bash
+curl -X POST http://localhost:3000/tags -H "Content-Type: application/json" -d '{"name":"срочно"}'
+curl -X PATCH http://localhost:3000/tags/4 -H "Content-Type: application/json" -d '{"name":"новое имя"}'
+```
+
+`spec/requests/tags_spec.rb` — 28 примеров, все проходят.
 

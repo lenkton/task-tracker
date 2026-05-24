@@ -9,4 +9,5 @@ Rails.application.routes.draw do
   # root "posts#index"
 
   resources :tasks, only: %i[ index show create update destroy ]
+  resources :tags, only: %i[ index show create update destroy ]
 end
