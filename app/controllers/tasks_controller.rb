@@ -2,8 +2,13 @@ class TasksController < ApplicationController
   before_action :set_task, only: %i[ show update destroy ]
 
   def index
-    tasks = Task.includes(:status).order(:id)
-    render json: TaskSerializer.collection(tasks)
+    result = Tasks::Filter.call(scope: Task.all, filters: filter_params)
+
+    if result.success?
+      render json: TaskSerializer.collection(result.value)
+    else
+      render json: { errors: result.errors }, status: :unprocessable_entity
+    end
   end
 
   def show
@@ -11,22 +16,22 @@ class TasksController < ApplicationController
   end
 
   def create
-    task = Tasks::Write.call(task: Task.new, attributes: task_params)
+    result = Tasks::Write.call(task: Task.new, attributes: task_params)
 
-    if task.persisted?
-      render json: TaskSerializer.call(task), status: :created
+    if result.success?
+      render json: TaskSerializer.call(result.value), status: :created
     else
-      render json: { errors: task.errors }, status: :unprocessable_entity
+      render json: { errors: result.errors }, status: :unprocessable_entity
     end
   end
 
   def update
-    task = Tasks::Write.call(task: @task, attributes: task_params)
+    result = Tasks::Write.call(task: @task, attributes: task_params)
 
-    if task.errors.empty?
-      render json: TaskSerializer.call(task)
+    if result.success?
+      render json: TaskSerializer.call(result.value)
     else
-      render json: { errors: task.errors }, status: :unprocessable_entity
+      render json: { errors: result.errors }, status: :unprocessable_entity
     end
   end
 
@@ -43,5 +48,9 @@ class TasksController < ApplicationController
 
   def task_params
     params.permit(:name, :description, :scheduled_at, :status)
+  end
+
+  def filter_params
+    params.permit(:scheduled_from, :scheduled_to, :statuses)
   end
 end

@@ -12,10 +12,9 @@ module Tasks
     def call
       @task.assign_attributes(@attributes.slice(:name, :description, :scheduled_at))
       assign_status
-      return @task if @task.errors.any?
+      return ServiceResult.failure(@task.errors) if @task.errors.any?
 
-      @task.save
-      @task
+      @task.save ? ServiceResult.success(@task) : ServiceResult.failure(@task.errors)
     end
 
     private

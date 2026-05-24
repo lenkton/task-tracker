@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/23/2026 at 22:03:40 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/24/2026 at 14:43:04 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -664,4 +664,217 @@ Tasks::Update   # task + attributes
 - в `errors` есть `"status"`
 
 6 примеров с `invalid status` проходят.
+
+---
+
+**User**
+
+теперь надо реализовать фильтрацию: надо в index добавить фильтры по дате исполнения и статусам
+
+---
+
+**Cursor**
+
+Добавляю сервис фильтрации и тесты по аналогии с `Tasks::Write`.
+
+
+Упрощаю контроллер — убираю двойной вызов фильтра.
+
+
+Исправляю сервис (ошибки и разбор `statuses`) и стабилизирую request-спеки через `subject!`.
+
+
+Конфликт имён: `subject!(:request)` перекрывает метод `request` в integration-спеках. Переименовываю.
+
+
+Добавляю хелпер `json_get` — в RSpec `get` с `params` и `as: :json` превращается в POST.
+
+
+Готово. Фильтрация в `GET /tasks` через `Tasks::Filter`.
+
+### Query-параметры
+
+| Параметр | Пример | Описание |
+|----------|--------|----------|
+| `statuses` | `todo` или `todo,in_progress` | один или несколько статусов (строки) |
+| `scheduled_from` | `2026-05-24` | задачи с `scheduled_at` ≥ начала дня |
+| `scheduled_to` | `2026-05-25` | задачи с `scheduled_at` ≤ конца дня |
+
+Пример:
+```
+GET /tasks?statuses=todo,in_progress&scheduled_from=2026-05-24&scheduled_to=2026-05-26
+```
+
+Для даты без времени используется весь день; с временем — точное значение.
+
+### Реализация
+
+- **`Tasks::Filter`** — фильтрация scope, ошибки при невалидной дате
+- **`TasksController#index`** — вызывает фильтр, при ошибке — `422`
+
+### Тесты
+
+- request-спеки на каждый фильтр и комбинацию
+- unit-спеки для `Tasks::Filter`
+- хелпер **`json_get`** — в RSpec `get` с `params` и `as: :json` уходит в POST, для GET с query нужен `Accept: application/json` в заголовке
+
+Все 49 примеров проходят.
+
+---
+
+**User**
+
+@spec/support/json_request_helpers.rb зачем это надо?
+
+---
+
+**Cursor**
+
+Это обходной путь из‑за особенности RSpec/Rails в request-спеках.
+
+### В чём проблема
+
+В RSpec такое сочетание:
+
+```ruby
+get tasks_path, params: { statuses: "todo" }, as: :json
+```
+
+**не делает GET с query-параметрами**, а отправляет **POST** на `/tasks` с телом `{"statuses":"todo"}`.
+
+Мы это как раз и поймали при отладке: `request.request_method` был `POST`, срабатывал `create`, `Tasks::Write` валидировал пустую задачу и отдавал 422 с ошибками `name` / `scheduled_at` / `status` — как будто фильтр сломан, хотя `Tasks::Filter` вообще не вызывался.
+
+Без параметров всё ок:
+
+```ruby
+get tasks_path, as: :json  # → GET
+```
+
+### Что делает хелпер
+
+```ruby
+def json_get(path, params: nil)
+  if params.present?
+    get path, params: params, headers: { "ACCEPT" => "application/json" }
+  else
+    get path, as: :json
+  end
+end
+```
+
+С параметрами — настоящий **GET** с `?statuses=todo&...` и заголовком `Accept: application/json`. Без параметров — как раньше, через `as: :json`.
+
+### Можно ли без него
+
+Да, в каждом тесте писать вручную:
+
+```ruby
+get tasks_path, params: { statuses: "todo" }, headers: { "ACCEPT" => "application/json" }
+```
+
+Хелпер просто прячет эту ловушку в одном месте, чтобы не наступать на неё снова в тестах фильтров.
+
+Если хочешь — могу убрать хелпер и заменить на явные `headers:` в спеках, или вынести это в комментарий в `tasks_spec.rb`.
+
+---
+
+**User**
+
+та слушай, давай просто в тестах на GET будем убирать as: :json  и эта штука не понадобится
+
+---
+
+**Cursor**
+
+Готово. У всех GET убран `as: :json`, `json_request_helpers.rb` удалён, подключение из `rails_helper` тоже.
+
+POST/PATCH/DELETE по-прежнему с `as: :json` — там он нужен для JSON-тела. Все 49 примеров проходят.
+
+---
+
+**User**
+
+@/home/sergey/.cursor/projects/home-sergey-code-ruby-task-tracker/terminals/1.txt:278-285 исправь
+
+---
+
+**Cursor**
+
+Во втором примере `call` не вызывался, поэтому `errors` пустой. Исправляю через `subject!`.
+
+
+Разбил на два примера в контексте `with invalid scheduled_from`: один проверяет `nil`, второй — ошибки (с предварительным `filter.call`, чтобы `errors` успел заполниться). RuboCop и тесты проходят.
+
+---
+
+**User**
+
+@spec/services/tasks/filter_spec.rb добавь тест на  scheduled_to и на несколько параметров сразу
+
+---
+
+**Cursor**
+
+Добавлены три примера:
+
+- **`scheduled_to`** — только «Review pull requests» (дата ≤ 2026-05-24)
+- **`statuses` + `scheduled_to`** — todo и дата до 24-го → одна задача
+- **`statuses` + `scheduled_from`** — in_progress и дата с 25-го → вторая фикстура
+
+Все 8 примеров в `filter_spec` проходят.
+
+---
+
+**User**
+
+слушай. мне как-то не нравится эта тема с attr_reader :errors
+
+мне больше нравится подход, когда сервисы возвращают какой-то объект успеха/неуспеха
+
+может, так попробуем сделать?
+
+---
+
+**Cursor**
+
+Изучаю сервисы и места их использования, чтобы ввести объект результата.
+
+
+Добавляю `ServiceResult` и перевожу `Filter` и `Write` на этот паттерн.
+
+
+Готово. Добавлен общий `ServiceResult`, оба сервиса и контроллер переведены на него.
+
+### `ServiceResult`
+
+```ruby
+ServiceResult.success(tasks)           # value — результат, errors — {}
+ServiceResult.failure(scheduled_from: ["is invalid"])  # value — nil
+# или ServiceResult.failure(task.errors)
+```
+
+- `success?` / `failure?`
+- `value` — полезная нагрузка при успехе
+- `errors` — хеш (из хеша или `ActiveModel::Errors`)
+
+### Использование в контроллере
+
+```ruby
+result = Tasks::Filter.call(scope: Task.all, filters: filter_params)
+
+if result.success?
+  render json: TaskSerializer.collection(result.value)
+else
+  render json: { errors: result.errors }, status: :unprocessable_entity
+end
+```
+
+То же для `Tasks::Write` в `create` / `update`.
+
+### Что убрано
+
+- `attr_reader :errors` у `Filter`
+- проверки `if tasks` / `task.persisted?` / `task.errors.empty?` в контроллере
+
+56 примеров проходят. Если понравится — можно вынести `render_service_result` в `ApplicationController`, но пока оставил явно в экшенах.
 

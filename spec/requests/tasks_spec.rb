@@ -15,26 +15,73 @@ RSpec.describe "Tasks API", type: :request do
   end
 
   describe "GET /tasks" do
-    before { get tasks_path, as: :json }
+    context "without filters" do
+      before { get tasks_path }
 
-    it { expect(response).to have_http_status(:ok) }
-    it { expect(json.length).to eq(2) }
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.length).to eq(2) }
 
-    it "returns fixture task names" do
-      expect(json.map { |item| item["name"] })
-        .to include("Review pull requests", "Implement task tracker API")
+      it "returns fixture task names" do
+        expect(json.map { |item| item["name"] })
+          .to include("Review pull requests", "Implement task tracker API")
+      end
+
+      it "includes status for review task" do
+        review_task = json.find { |item| item["name"] == "Review pull requests" }
+
+        expect(review_task["status"]).to eq("todo")
+      end
     end
 
-    it "includes status for review task" do
-      review_task = json.find { |item| item["name"] == "Review pull requests" }
+    context "with statuses filter" do
+      subject!(:fetch_tasks) { get tasks_path, params: { statuses: "todo" } }
 
-      expect(review_task["status"]).to eq("todo")
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.length).to eq(1) }
+      it { expect(json[0]["status"]).to eq("todo") }
+    end
+
+    context "with multiple statuses filter" do
+      subject!(:fetch_tasks) { get tasks_path, params: { statuses: "todo,in_progress" } }
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.length).to eq(2) }
+    end
+
+    context "with scheduled_from filter" do
+      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_from: "2026-05-25" } }
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.map { |item| item["name"] }).to eq([ "Implement task tracker API" ]) }
+    end
+
+    context "with scheduled_to filter" do
+      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_to: "2026-05-24" } }
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.map { |item| item["name"] }).to eq([ "Review pull requests" ]) }
+    end
+
+    context "with combined filters" do
+      subject!(:fetch_tasks) do
+        get tasks_path, params: { statuses: "todo", scheduled_to: "2026-05-24" }
+      end
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json.map { |item| item["name"] }).to eq([ "Review pull requests" ]) }
+    end
+
+    context "with invalid scheduled_from" do
+      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_from: "not-a-date" } }
+
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to include("scheduled_from") }
     end
   end
 
   describe "GET /tasks/:id" do
     context "when task exists" do
-      before { get task_path(task), as: :json }
+      before { get task_path(task) }
 
       it { expect(response).to have_http_status(:ok) }
       it { expect(json["id"]).to eq(task.id) }
@@ -43,7 +90,7 @@ RSpec.describe "Tasks API", type: :request do
     end
 
     context "when task is missing" do
-      before { get task_path(id: 0), as: :json }
+      before { get task_path(id: 0) }
 
       it { expect(response).to have_http_status(:not_found) }
     end
