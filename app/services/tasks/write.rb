@@ -14,7 +14,18 @@ module Tasks
       assign_status
       return ServiceResult.failure(@task.errors) if @task.errors.any?
 
-      @task.save ? ServiceResult.success(@task) : ServiceResult.failure(@task.errors)
+      saved = false
+      @task.transaction do
+        saved = @task.save
+        assign_tags if saved && @attributes.key?(:tags)
+        raise ActiveRecord::Rollback if @task.errors.any?
+      end
+
+      if saved && @task.errors.empty?
+        ServiceResult.success(@task.reload)
+      else
+        ServiceResult.failure(@task.errors)
+      end
     end
 
     private
@@ -30,6 +41,20 @@ module Tasks
       else
         @task.errors.add(:status, "is invalid")
       end
+    end
+
+    def assign_tags
+      @task.tags = resolve_tags(@attributes[:tags])
+    end
+
+    def resolve_tags(raw_tags)
+      tag_names(raw_tags).map do |name|
+        Tag.find_or_create_by!(name: name)
+      end
+    end
+
+    def tag_names(raw_tags)
+      Array(raw_tags).map(&:to_s).map(&:strip).reject(&:blank?).uniq
     end
   end
 end

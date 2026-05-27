@@ -13,7 +13,7 @@ module Tasks
       validate_filters
       return ServiceResult.failure(@errors) if @errors.any?
 
-      scope = @scope.includes(:status).order(:id)
+      scope = @scope.includes(:status, :tags).order(:id)
       scope = filter_by_statuses(scope)
       ServiceResult.success(filter_by_scheduled_at(scope))
     end

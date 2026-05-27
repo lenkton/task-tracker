@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Tasks API", type: :request do
-  fixtures :tasks, :statuses
+  fixtures :tasks, :statuses, :tags, :tags_tasks
 
   let(:task) { tasks(:one) }
 
@@ -87,6 +87,7 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(json["id"]).to eq(task.id) }
       it { expect(json["name"]).to eq("Review pull requests") }
       it { expect(json["status"]).to eq("todo") }
+      it { expect(json["tags"]).to eq([ "операции", "отчетность" ]) }
     end
 
     context "when task is missing" do
@@ -130,6 +131,23 @@ RSpec.describe "Tasks API", type: :request do
       end
     end
 
+    context "with tags" do
+      let(:tagged_task_params) { valid_task_params.merge(tags: [ "отчетность", "новый тег" ]) }
+
+      it "creates unknown tags" do
+        expect {
+          post tasks_path, params: tagged_task_params, as: :json
+        }.to change(Tag, :count).by(1)
+      end
+
+      context "when submitted" do
+        before { post tasks_path, params: tagged_task_params, as: :json }
+
+        it { expect(response).to have_http_status(:created) }
+        it { expect(json["tags"]).to contain_exactly("отчетность", "новый тег") }
+      end
+    end
+
     context "with invalid status" do
       let(:invalid_status_params) { valid_task_params.merge(status: "nonexistent") }
 
@@ -163,6 +181,26 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(response).to have_http_status(:unprocessable_content) }
       it { expect(json["errors"]).to include("name") }
       it { expect(task.reload.name).to eq("Review pull requests") }
+    end
+
+    context "with tags" do
+      context "when fewer tags are sent" do
+        subject!(:update_task) { patch task_path(task), params: { tags: [ "звонок" ] }, as: :json }
+
+        it { expect(response).to have_http_status(:ok) }
+        it { expect(json["tags"]).to eq([ "звонок" ]) }
+        it { expect(task.reload.tags.map(&:name)).to eq([ "звонок" ]) }
+        it { expect(task.tags.map(&:name)).not_to include("отчетность") }
+        it { expect(task.tags.map(&:name)).not_to include("операции") }
+      end
+
+      context "when tags are cleared" do
+        subject!(:update_task) { patch task_path(task), params: { tags: [] }, as: :json }
+
+        it { expect(response).to have_http_status(:ok) }
+        it { expect(json["tags"]).to eq([]) }
+        it { expect(task.reload.tags).to be_empty }
+      end
     end
 
     context "with invalid status" do

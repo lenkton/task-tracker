@@ -43,11 +43,11 @@ class TasksController < ApplicationController
   private
 
   def set_task
-    @task = Task.includes(:status).find(params[:id])
+    @task = Task.includes(:status, :tags).find(params[:id])
   end
 
   def task_params
-    params.permit(:name, :description, :scheduled_at, :status)
+    params.permit(:name, :description, :scheduled_at, :status, tags: [])
   end
 
   def filter_params

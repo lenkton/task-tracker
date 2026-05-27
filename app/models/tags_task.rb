@@ -1,4 +1,5 @@
-# just a class for the join table
+# Join-таблица tags ↔ tasks без колонки id (см. миграцию create_join_table).
+# Модель нужна для валидаций и has_many :through; primary key у записей нет.
 class TagsTask < ApplicationRecord
   belongs_to :tag
   belongs_to :task

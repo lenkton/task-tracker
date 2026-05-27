@@ -1,7 +1,8 @@
 class Tag < ApplicationRecord
   SYSTEM_NAMES = %w[отчетность операции звонок].freeze
 
-  has_many :tags_tasks, dependent: :destroy
+  # См. комментарий в Task — для join-таблицы без id нужен delete_all, не destroy.
+  has_many :tags_tasks, dependent: :delete_all
   has_many :tasks, through: :tags_tasks
 
   validates :name, presence: true, uniqueness: true

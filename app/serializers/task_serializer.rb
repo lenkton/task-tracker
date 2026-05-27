@@ -10,6 +10,7 @@ class TaskSerializer
       description: task.description,
       scheduled_at: task.scheduled_at,
       status: task.status.name,
+      tags: task.tags.map(&:name).sort,
       created_at: task.created_at,
       updated_at: task.updated_at
     }
