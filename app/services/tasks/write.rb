@@ -5,12 +5,13 @@ module Tasks
     end
 
     def initialize(task:, attributes:)
-      @task = task
-      @attributes = attributes.to_h.symbolize_keys
+      @attributes = attributes.to_h.deep_symbolize_keys
+      @task = resolve_task(task)
     end
 
     def call
       @task.assign_attributes(@attributes.slice(:name, :description, :scheduled_at))
+      assign_repetition_attributes if @task.new_record?
       assign_status
       return ServiceResult.failure(@task.errors) if @task.errors.any?
 
@@ -29,6 +30,41 @@ module Tasks
     end
 
     private
+
+    def resolve_task(task)
+      return build_task(nil) if task.blank?
+      return task if task.new_record? && repetition_type_matches?(task)
+      return build_task(task) if task.new_record?
+
+      task
+    end
+
+    def repetition_type_matches?(task)
+      expected_api_type = @attributes[:repetition_type].presence || "one_time"
+      task.class == Task.class_for_api_type(expected_api_type)
+    rescue Task::UnknownRepetitionType
+      false
+    end
+
+    def build_task(fallback_task)
+      api_type = @attributes[:repetition_type].presence || "one_time"
+      Task.class_for_api_type(api_type).new
+    rescue Task::UnknownRepetitionType
+      task = fallback_task || Task.new
+      task.errors.add(:repetition_type, "is invalid")
+      task
+    end
+
+    def assign_repetition_attributes
+      @task.repetition_data = normalize_repetition_data(@attributes[:repetition_data])
+      @task.repetition_event_number = 0
+    end
+
+    def normalize_repetition_data(raw_data)
+      return {} if raw_data.nil?
+
+      raw_data.to_h.transform_keys(&:to_s)
+    end
 
     def assign_status
       return unless @attributes.key?(:status)

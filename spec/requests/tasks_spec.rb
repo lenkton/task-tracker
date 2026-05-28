@@ -88,6 +88,9 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(json["name"]).to eq("Review pull requests") }
       it { expect(json["status"]).to eq("todo") }
       it { expect(json["tags"]).to eq([ "операции", "отчетность" ]) }
+      it { expect(json["repetition_type"]).to eq("one_time") }
+      it { expect(json["repetition_data"]).to eq({}) }
+      it { expect(json["repetition_event_number"]).to eq(0) }
     end
 
     context "when task is missing" do
@@ -111,7 +114,89 @@ RSpec.describe "Tasks API", type: :request do
         it { expect(response).to have_http_status(:created) }
         it { expect(json["name"]).to eq("Write tests") }
         it { expect(json["status"]).to eq("todo") }
+        it { expect(json["repetition_type"]).to eq("one_time") }
+        it { expect(json["repetition_data"]).to eq({}) }
+        it { expect(json["repetition_event_number"]).to eq(0) }
       end
+    end
+
+    context "with daily repetition" do
+      let(:daily_task_params) do
+        valid_task_params.merge(
+          repetition_type: "daily",
+          repetition_data: { period: 2 }
+        )
+      end
+
+      context "when submitted" do
+        before { post tasks_path, params: daily_task_params, as: :json }
+
+        it { expect(response).to have_http_status(:created) }
+        it { expect(json["repetition_type"]).to eq("daily") }
+        it { expect(json["repetition_data"]).to eq({ "period" => 2 }) }
+        it { expect(Task.last).to be_a(Task::Daily) }
+      end
+    end
+
+    context "with monthly repetition" do
+      let(:monthly_task_params) do
+        valid_task_params.merge(
+          repetition_type: "monthly",
+          repetition_data: { day_of_month: 15 }
+        )
+      end
+
+      context "when submitted" do
+        before { post tasks_path, params: monthly_task_params, as: :json }
+
+        it { expect(response).to have_http_status(:created) }
+        it { expect(json["repetition_type"]).to eq("monthly") }
+        it { expect(json["repetition_data"]).to eq({ "day_of_month" => 15 }) }
+      end
+    end
+
+    context "with odd_even repetition" do
+      let(:odd_even_task_params) do
+        valid_task_params.merge(
+          repetition_type: "odd_even",
+          repetition_data: { parity: "odd" }
+        )
+      end
+
+      context "when submitted" do
+        before { post tasks_path, params: odd_even_task_params, as: :json }
+
+        it { expect(response).to have_http_status(:created) }
+        it { expect(json["repetition_type"]).to eq("odd_even") }
+        it { expect(json["repetition_data"]).to eq({ "parity" => "odd" }) }
+      end
+    end
+
+    context "with invalid repetition_type" do
+      subject!(:create_task) do
+        post tasks_path, params: valid_task_params.merge(repetition_type: "weekly"), as: :json
+      end
+
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to include("repetition_type") }
+    end
+
+    context "with invalid repetition_data for daily" do
+      subject!(:create_task) do
+        post tasks_path, params: valid_task_params.merge(repetition_type: "daily", repetition_data: {}), as: :json
+      end
+
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to include("repetition_data") }
+    end
+
+    context "when repetition_event_number is sent on create" do
+      before do
+        post tasks_path, params: valid_task_params.merge(repetition_event_number: 5), as: :json
+      end
+
+      it { expect(response).to have_http_status(:created) }
+      it { expect(json["repetition_event_number"]).to eq(0) }
     end
 
     context "with invalid params" do

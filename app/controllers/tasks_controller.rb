@@ -47,7 +47,12 @@ class TasksController < ApplicationController
   end
 
   def task_params
-    params.permit(:name, :description, :scheduled_at, :status, tags: [])
+    params.permit(
+      :name, :description, :scheduled_at, :status,
+      :repetition_type,
+      tags: [],
+      repetition_data: {}
+    )
   end
 
   def filter_params

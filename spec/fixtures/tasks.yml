@@ -3,9 +3,15 @@ one:
   description: Check open PRs on GitHub
   scheduled_at: 2026-05-24 10:00:00
   status: todo
+  repetition_type: Task::OneTime
+  repetition_data: {}
+  repetition_event_number: 0
 
 two:
   name: Implement task tracker API
   description: Add CRUD endpoints for tasks
   scheduled_at: 2026-05-25 12:00:00
   status: in_progress
+  repetition_type: Task::OneTime
+  repetition_data: {}
+  repetition_event_number: 0
