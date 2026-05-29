@@ -17,6 +17,7 @@ class TaskSerializer
       repetition_data: task.api_repetition_data,
       repetition_event_number: event_number,
       series_task_id: task.series_task_id,
+      user_id: task.user_id,
       created_at: task.created_at,
       updated_at: task.updated_at
     }

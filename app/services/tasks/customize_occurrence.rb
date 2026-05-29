@@ -59,6 +59,7 @@ module Tasks
         description: @series.description,
         scheduled_at: scheduled_at,
         status: @series.status,
+        user: @series.user,
         series_task: @series,
         repetition_data: {},
         repetition_event_number: @event_number,

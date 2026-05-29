@@ -1,7 +1,9 @@
 require "rails_helper"
 
 RSpec.describe Tasks::Write do
-  fixtures :tasks, :statuses, :tags
+  fixtures :tasks, :statuses, :tags, :users
+
+  let(:user) { users(:one) }
 
   describe "repetition" do
     let(:base_attributes) do
@@ -16,7 +18,7 @@ RSpec.describe Tasks::Write do
     describe "create with daily repetition" do
       subject!(:write_task) do
         described_class.call(
-          task: Task.new,
+          task: Task.new(user:),
           attributes: base_attributes.merge(
             repetition_type: "daily",
             repetition_data: { period: 3 }
@@ -32,7 +34,7 @@ RSpec.describe Tasks::Write do
     describe "create with invalid repetition_type" do
       subject!(:write_task) do
         described_class.call(
-          task: Task.new,
+          task: Task.new(user:),
           attributes: base_attributes.merge(repetition_type: "weekly")
         )
       end
@@ -49,6 +51,7 @@ RSpec.describe Tasks::Write do
         description: "",
         scheduled_at: 1.day.from_now,
         status: statuses(:todo),
+        user:,
         repetition_data: {},
         repetition_event_number: 0
       )

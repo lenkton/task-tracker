@@ -1,15 +1,17 @@
 require "rails_helper"
 
 RSpec.describe Task do
-  fixtures :statuses, :tasks
+  fixtures :statuses, :tasks, :users
 
   let(:status) { statuses(:todo) }
+  let(:user) { users(:one) }
   let(:base_attributes) do
     {
       name: "Recurring task",
       description: "",
       scheduled_at: 1.day.from_now,
-      status:
+      status:,
+      user:
     }
   end
 

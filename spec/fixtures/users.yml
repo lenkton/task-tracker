@@ -2,3 +2,8 @@ one:
   email: user@example.com
   name: Test User
   auth_token: test-auth-token
+
+two:
+  email: other@example.com
+  name: Other User
+  auth_token: other-token

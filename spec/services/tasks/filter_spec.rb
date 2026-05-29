@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Tasks::Filter do
-  fixtures :tasks, :statuses
+  fixtures :tasks, :statuses, :users
 
   let(:interval) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
 

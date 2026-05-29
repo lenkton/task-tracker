@@ -48,7 +48,9 @@ module Tasks
 
     def build_task(fallback_task)
       api_type = @attributes[:repetition_type].presence || "one_time"
-      Task.class_for_api_type(api_type).new
+      task = Task.class_for_api_type(api_type).new
+      task.user = fallback_task.user if fallback_task&.user
+      task
     rescue Task::UnknownRepetitionType
       task = fallback_task || Task.new
       task.errors.add(:repetition_type, "is invalid")

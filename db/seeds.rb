@@ -11,7 +11,7 @@ Tag::SYSTEM_NAMES.each do |tag_name|
 end
 
 if Rails.env.development?
-  User.find_or_create_by!(email: "dev@example.com") do |user|
+  dev_user = User.find_or_create_by!(email: "dev@example.com") do |user|
     user.name = "Developer"
     user.auth_token = "dev-token"
   end
@@ -35,6 +35,7 @@ if Rails.env.development?
       task.description = attrs[:description]
       task.scheduled_at = attrs[:scheduled_at]
       task.status = status
+      task.user = dev_user
     end
   end
 end

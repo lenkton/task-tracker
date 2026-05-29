@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Tasks::CustomizeOccurrence do
-  fixtures :tasks, :statuses, :tags, :tags_tasks
+  fixtures :tasks, :statuses, :tags, :tags_tasks, :users
 
   let(:series) { tasks(:daily_standup) }
 

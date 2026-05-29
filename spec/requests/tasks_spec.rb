@@ -73,6 +73,13 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(json["repetition_type"]).to eq("one_time") }
       it { expect(json["repetition_data"]).to eq({}) }
       it { expect(json["repetition_event_number"]).to eq(0) }
+      it { expect(json["user_id"]).to eq(users(:one).id) }
+    end
+
+    context "when task belongs to another user" do
+      before { get task_path(task), headers: { "Authorization" => "Bearer other-token" } }
+
+      it { expect(response).to have_http_status(:not_found) }
     end
 
     context "when task is missing" do
@@ -99,6 +106,7 @@ RSpec.describe "Tasks API", type: :request do
         it { expect(json["repetition_type"]).to eq("one_time") }
         it { expect(json["repetition_data"]).to eq({}) }
         it { expect(json["repetition_event_number"]).to eq(0) }
+        it { expect(json["user_id"]).to eq(users(:one).id) }
       end
     end
 

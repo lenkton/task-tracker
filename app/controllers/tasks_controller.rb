@@ -2,7 +2,7 @@ class TasksController < ApplicationController
   before_action :set_task, only: %i[ show update destroy ]
 
   def index
-    result = Tasks::Filter.call(scope: Task.all, filters: filter_params)
+    result = Tasks::Filter.call(scope: current_user.tasks, filters: filter_params)
 
     if result.success?
       render json: TaskSerializer.collection(result.value)
@@ -16,7 +16,7 @@ class TasksController < ApplicationController
   end
 
   def create
-    result = Tasks::Write.call(task: Task.new, attributes: task_params)
+    result = Tasks::Write.call(task: Task.new(user: current_user), attributes: task_params)
 
     if result.success?
       render json: TaskSerializer.call(result.value), status: :created
@@ -47,7 +47,7 @@ class TasksController < ApplicationController
   private
 
   def set_task
-    @task = Task.includes(:status, :tags, :series_task).find(params[:id])
+    @task = current_user.tasks.includes(:status, :tags, :series_task).find(params[:id])
   end
 
   def task_params

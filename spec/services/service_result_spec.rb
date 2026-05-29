@@ -26,7 +26,7 @@ RSpec.describe ServiceResult do
       end
 
       it { expect(result).to be_failure }
-      it { expect(result.errors).to include(:name, :scheduled_at, :status) }
+      it { expect(result.errors).to include(:name, :scheduled_at, :status, :user) }
     end
   end
 end

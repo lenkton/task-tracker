@@ -3,6 +3,7 @@ one:
   description: Check open PRs on GitHub
   scheduled_at: 2026-05-24 10:00:00
   status: todo
+  user: one
   repetition_type: Task::OneTime
   repetition_data: {}
   repetition_event_number: 0
@@ -12,6 +13,7 @@ two:
   description: Add CRUD endpoints for tasks
   scheduled_at: 2026-05-25 12:00:00
   status: in_progress
+  user: one
   repetition_type: Task::OneTime
   repetition_data: {}
   repetition_event_number: 0
@@ -21,6 +23,7 @@ daily_standup:
   description: Team sync
   scheduled_at: 2026-05-20 09:00:00
   status: todo
+  user: one
   repetition_type: Task::Daily
   repetition_data: { period: 2 }
   repetition_event_number: 0
