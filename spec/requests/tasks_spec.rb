@@ -253,8 +253,8 @@ RSpec.describe "Tasks API", type: :request do
 
       it { expect(response).to have_http_status(:ok) }
       it { expect(json["name"]).to eq("Custom standup") }
-      it { expect(json["repetition_type"]).to eq("customized_event") }
-      it { expect(json["repetition_data"]).to eq({}) }
+      it { expect(json["repetition_type"]).to eq("daily") }
+      it { expect(json["repetition_data"]).to eq({ "period" => 2 }) }
       it { expect(json["series_task_id"]).to eq(series.id) }
       it { expect(json["repetition_event_number"]).to eq(4) }
       it { expect(json["scheduled_at"]).to eq("2026-05-26T09:00:00.000Z") }
@@ -345,13 +345,14 @@ RSpec.describe "Tasks API", type: :request do
       get tasks_path, params: interval_params
     end
 
-    it "returns the customized event as one-time" do
+    it "returns the customized event with the series repetition type" do
       customized = json.find { |item| item["name"] == "Custom standup" }
 
       expect(customized).to include(
-        "repetition_type" => "one_time",
-        "repetition_data" => {},
-        "repetition_event_number" => 0
+        "repetition_type" => "daily",
+        "repetition_data" => { "period" => 2 },
+        "repetition_event_number" => 4,
+        "series_task_id" => series.id
       )
     end
 

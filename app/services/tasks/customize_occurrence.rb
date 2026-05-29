@@ -117,7 +117,9 @@ module Tasks
       end
 
       if saved && task.errors.empty?
-        ServiceResult.success(task.reload)
+        ServiceResult.success(
+          task.class.includes(:status, :tags, :series_task).find(task.id)
+        )
       else
         ServiceResult.failure(task.errors)
       end

@@ -13,6 +13,14 @@ class Task::CustomizedEvent < Task
     for_series(series_id).find_by(repetition_event_number: event_number)
   end
 
+  def api_repetition_type
+    series_task.api_repetition_type
+  end
+
+  def api_repetition_data
+    series_task.api_repetition_data
+  end
+
   private
 
   def repetition_data_must_be_empty

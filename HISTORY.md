@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/29/2026 at 19:10:20 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/29/2026 at 19:31:56 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1696,4 +1696,49 @@ PATCH /tasks/3
 - **`validates :repetition_event_number, uniqueness: { scope: :series_task_id }`** — вместо `series_event_must_be_unique`
 
 Кастомными остались только те проверки, для которых нет готовых валидаторов: пустой `repetition_data` и то, что серия должна быть recurring.
+
+---
+
+**User**
+
+так, но я хочу, чтобы у этих кастомизированных элементов возвращался repetition_type такой же, как у серии
+
+в том числе, в ручках изменения и прочих
+
+---
+
+**Cursor**
+
+Просматриваю сериалайзер и тесты — нужно отдавать `repetition_type` серии для кастомных событий во всех эндпоинтах.
+
+
+Добавлю делегирование `repetition_type` и `repetition_data` серии в модели и упрощу сериалайзер.
+
+
+Готово. Кастомные события в API теперь выглядят как вхождения серии, а не как `customized_event` / `one_time`.
+
+### Что изменилось
+
+**`Task::CustomizedEvent`** делегирует в серию:
+- `api_repetition_type` → `daily` / `monthly` / `odd_even`
+- `api_repetition_data` → настройки серии (`{ "period": 2 }` и т.д.)
+
+**`TaskSerializer`** всегда использует эти методы; отдельная «one-time»-обёртка для списка убрана.
+
+**`GET /tasks`** — кастомное событие отдаётся с типом и данными серии, плюс свой `repetition_event_number` и `series_task_id`:
+
+```json
+{
+  "id": 99,
+  "name": "Custom standup",
+  "repetition_type": "daily",
+  "repetition_data": { "period": 2 },
+  "repetition_event_number": 4,
+  "series_task_id": 3
+}
+```
+
+**`PATCH /tasks/:id`** и **`GET /tasks/:id`** — то же самое.
+
+В БД по-прежнему `Task::CustomizedEvent`; меняется только представление в API.
 

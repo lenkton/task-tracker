@@ -38,10 +38,10 @@ RSpec.describe Tasks::Filter do
 
       subject(:result) { described_class.call(scope: Task.all, filters: interval) }
 
-      it "returns the customized event as a one-time occurrence" do
+      it "returns the customized event with its series event number" do
         customized = result.value.find { |occurrence| occurrence.task.name == "Custom standup" }
 
-        expect(customized.event_number).to eq(0)
+        expect(customized.event_number).to eq(4)
         expect(customized.scheduled_at).to eq(Time.zone.parse("2026-05-26 10:30:00"))
       end
 

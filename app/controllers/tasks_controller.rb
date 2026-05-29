@@ -47,7 +47,7 @@ class TasksController < ApplicationController
   private
 
   def set_task
-    @task = Task.includes(:status, :tags).find(params[:id])
+    @task = Task.includes(:status, :tags, :series_task).find(params[:id])
   end
 
   def task_params

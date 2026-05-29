@@ -13,7 +13,7 @@ module Tasks
       validate_filters
       return ServiceResult.failure(@errors) if @errors.any?
 
-      scope = @scope.includes(:status, :tags)
+      scope = @scope.includes(:status, :tags, series_task: [])
       scope = filter_by_statuses(scope)
       occurrences = one_time_occurrences(scope) +
                     customized_occurrences(scope) +
@@ -46,7 +46,7 @@ module Tasks
     def customized_occurrences(scope)
       scope.customized_events
            .where(scheduled_at: @scheduled_from..@scheduled_to)
-           .map { |task| task.build_occurrence(0, task.scheduled_at) }
+           .map { |task| task.build_occurrence(task.repetition_event_number, task.scheduled_at) }
     end
 
     def recurring_occurrences(scope)

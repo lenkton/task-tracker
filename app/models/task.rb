@@ -45,6 +45,10 @@ class Task < ApplicationRecord
     REPETITION_TYPE_CLASS_NAMES.key(self.class.name)
   end
 
+  def api_repetition_data
+    repetition_data
+  end
+
   def build_occurrence(event_number, scheduled_at)
     Tasks::Occurrence.new(task: self, event_number:, scheduled_at:)
   end
