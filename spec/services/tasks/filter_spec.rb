@@ -3,51 +3,70 @@ require "rails_helper"
 RSpec.describe Tasks::Filter do
   fixtures :tasks, :statuses
 
+  let(:interval) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+
   describe ".call" do
-    it "filters by status name" do
-      result = described_class.call(scope: Task.all, filters: { statuses: "todo" })
+    it "returns one-time tasks within the interval" do
+      result = described_class.call(scope: Task.all, filters: interval)
 
-      expect(result.value.map(&:name)).to eq([ "Review pull requests" ])
+      expect(result.value.map { |occurrence| occurrence.task.name })
+        .to include("Review pull requests", "Implement task tracker API")
     end
 
-    it "filters by multiple status names" do
-      result = described_class.call(scope: Task.all, filters: { statuses: "todo,in_progress" })
+    context "when expanding recurring tasks" do
+      subject(:standup_occurrences) do
+        described_class.call(scope: Task.all, filters: interval).value.select { |occurrence| occurrence.task.name == "Daily standup" }
+      end
 
-      expect(result.value.map(&:name)).to contain_exactly("Review pull requests", "Implement task tracker API")
+      it { expect(standup_occurrences.map(&:event_number)).to eq([ 2, 3, 4 ]) }
+      it { expect(standup_occurrences.map(&:scheduled_at).map(&:to_date)).to eq([ Date.new(2026, 5, 24), Date.new(2026, 5, 26), Date.new(2026, 5, 28) ]) }
     end
 
-    it "filters by scheduled_from" do
-      result = described_class.call(scope: Task.all, filters: { scheduled_from: "2026-05-25" })
+    context "with status filter" do
+      subject(:result) { described_class.call(scope: Task.all, filters: interval.merge(statuses: "todo")) }
 
-      expect(result.value.map(&:name)).to eq([ "Implement task tracker API" ])
+      it { expect(result.value.map { |occurrence| occurrence.task.name }).to contain_exactly("Review pull requests", "Daily standup", "Daily standup", "Daily standup") }
     end
 
-    it "filters by scheduled_to" do
-      result = described_class.call(scope: Task.all, filters: { scheduled_to: "2026-05-24" })
+    context "with multiple statuses filter" do
+      subject(:result) { described_class.call(scope: Task.all, filters: interval.merge(statuses: "todo,in_progress")) }
 
-      expect(result.value.map(&:name)).to eq([ "Review pull requests" ])
+      it { expect(result.value.map { |occurrence| occurrence.task.name }).to include("Review pull requests", "Implement task tracker API", "Daily standup") }
     end
 
-    it "filters by statuses and scheduled_to" do
-      result = described_class.call(
-        scope: Task.all,
-        filters: { statuses: "todo", scheduled_to: "2026-05-24" }
-      )
+    context "when scheduled_from is missing" do
+      subject(:result) { described_class.call(scope: Task.all, filters: { scheduled_to: "2026-05-28" }) }
 
-      expect(result.value.map(&:name)).to eq([ "Review pull requests" ])
+      it { expect(result).to be_failure }
+      it { expect(result.errors).to eq({ scheduled_from: [ "can't be blank" ] }) }
     end
 
-    it "filters by statuses and scheduled_from" do
-      result = described_class.call(
-        scope: Task.all,
-        filters: { statuses: "in_progress", scheduled_from: "2026-05-25" }
-      )
+    context "when scheduled_to is missing" do
+      subject(:result) { described_class.call(scope: Task.all, filters: { scheduled_from: "2026-05-24" }) }
 
-      expect(result.value.map(&:name)).to eq([ "Implement task tracker API" ])
+      it { expect(result).to be_failure }
+      it { expect(result.errors).to eq({ scheduled_to: [ "can't be blank" ] }) }
+    end
+
+    context "when scheduled_from is after scheduled_to" do
+      subject(:result) do
+        described_class.call(
+          scope: Task.all,
+          filters: { scheduled_from: "2026-05-28", scheduled_to: "2026-05-24" }
+        )
+      end
+
+      it { expect(result).to be_failure }
+      it { expect(result.errors).to eq({ scheduled_to: [ "must be on or after scheduled_from" ] }) }
     end
 
     context "with invalid scheduled_from" do
-      subject(:result) { described_class.call(scope: Task.all, filters: { scheduled_from: "not-a-date" }) }
+      subject(:result) do
+        described_class.call(
+          scope: Task.all,
+          filters: { scheduled_from: "not-a-date", scheduled_to: "2026-05-28" }
+        )
+      end
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ scheduled_from: [ "is invalid" ] }) }

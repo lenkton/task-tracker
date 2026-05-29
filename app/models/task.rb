@@ -7,6 +7,8 @@ class Task < ApplicationRecord
     "customized_event" => "Task::CustomizedEvent"
   }.freeze
 
+  RECURRING_STI_TYPES = %w[Task::Daily Task::Monthly Task::OddEven].freeze
+
   class UnknownRepetitionType < StandardError; end
 
   belongs_to :status
@@ -23,6 +25,9 @@ class Task < ApplicationRecord
 
   self.inheritance_column = "repetition_type"
 
+  scope :one_time, -> { where(repetition_type: "Task::OneTime") }
+  scope :recurring, -> { where(repetition_type: RECURRING_STI_TYPES) }
+
   def self.class_for_api_type(api_type)
     class_name = REPETITION_TYPE_CLASS_NAMES.fetch(api_type) { raise UnknownRepetitionType }
     class_name.constantize
@@ -30,5 +35,13 @@ class Task < ApplicationRecord
 
   def api_repetition_type
     REPETITION_TYPE_CLASS_NAMES.key(self.class.name)
+  end
+
+  def build_occurrence(event_number, scheduled_at)
+    Tasks::Occurrence.new(task: self, event_number:, scheduled_at:)
+  end
+
+  def generate_occurrences(from, to)
+    raise NotImplementedError
   end
 end

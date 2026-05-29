@@ -15,64 +15,46 @@ RSpec.describe "Tasks API", type: :request do
   end
 
   describe "GET /tasks" do
-    context "without filters" do
+    let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+
+    context "without interval params" do
       before { get tasks_path }
 
-      it { expect(response).to have_http_status(:ok) }
-      it { expect(json.length).to eq(2) }
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to include("scheduled_from", "scheduled_to") }
+    end
 
-      it "returns fixture task names" do
-        expect(json.map { |item| item["name"] })
-          .to include("Review pull requests", "Implement task tracker API")
+    context "with interval params" do
+      before { get tasks_path, params: interval_params }
+
+      it { expect(response).to have_http_status(:ok) }
+
+      it "returns one-time and expanded recurring tasks" do
+        expect(json.map { |item| item["name"] }).to include(
+          "Review pull requests",
+          "Implement task tracker API",
+          "Daily standup"
+        )
       end
 
-      it "includes status for review task" do
-        review_task = json.find { |item| item["name"] == "Review pull requests" }
+      it "assigns repetition_event_number to generated occurrences" do
+        standup_events = json.select { |item| item["name"] == "Daily standup" }
 
-        expect(review_task["status"]).to eq("todo")
+        expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 2, 3, 4 ])
       end
     end
 
     context "with statuses filter" do
-      subject!(:fetch_tasks) { get tasks_path, params: { statuses: "todo" } }
+      subject!(:fetch_tasks) { get tasks_path, params: interval_params.merge(statuses: "todo") }
 
       it { expect(response).to have_http_status(:ok) }
-      it { expect(json.length).to eq(1) }
-      it { expect(json[0]["status"]).to eq("todo") }
-    end
-
-    context "with multiple statuses filter" do
-      subject!(:fetch_tasks) { get tasks_path, params: { statuses: "todo,in_progress" } }
-
-      it { expect(response).to have_http_status(:ok) }
-      it { expect(json.length).to eq(2) }
-    end
-
-    context "with scheduled_from filter" do
-      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_from: "2026-05-25" } }
-
-      it { expect(response).to have_http_status(:ok) }
-      it { expect(json.map { |item| item["name"] }).to eq([ "Implement task tracker API" ]) }
-    end
-
-    context "with scheduled_to filter" do
-      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_to: "2026-05-24" } }
-
-      it { expect(response).to have_http_status(:ok) }
-      it { expect(json.map { |item| item["name"] }).to eq([ "Review pull requests" ]) }
-    end
-
-    context "with combined filters" do
-      subject!(:fetch_tasks) do
-        get tasks_path, params: { statuses: "todo", scheduled_to: "2026-05-24" }
-      end
-
-      it { expect(response).to have_http_status(:ok) }
-      it { expect(json.map { |item| item["name"] }).to eq([ "Review pull requests" ]) }
+      it { expect(json.map { |item| item["name"] }).not_to include("Implement task tracker API") }
     end
 
     context "with invalid scheduled_from" do
-      subject!(:fetch_tasks) { get tasks_path, params: { scheduled_from: "not-a-date" } }
+      subject!(:fetch_tasks) do
+        get tasks_path, params: { scheduled_from: "not-a-date", scheduled_to: "2026-05-28" }
+      end
 
       it { expect(response).to have_http_status(:unprocessable_content) }
       it { expect(json["errors"]).to include("scheduled_from") }

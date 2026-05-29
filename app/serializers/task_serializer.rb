@@ -1,21 +1,32 @@
 class TaskSerializer
-  def self.collection(tasks)
-    tasks.map { |task| call(task) }
+  def self.collection(items)
+    items.map { |item| call(item) }
   end
 
-  def self.call(task)
+  def self.call(item)
+    task, scheduled_at, event_number = extract(item)
+
     {
       id: task.id,
       name: task.name,
       description: task.description,
-      scheduled_at: task.scheduled_at,
+      scheduled_at: scheduled_at,
       status: task.status.name,
       tags: task.tags.map(&:name).sort,
       repetition_type: task.api_repetition_type,
       repetition_data: task.repetition_data,
-      repetition_event_number: task.repetition_event_number,
+      repetition_event_number: event_number,
       created_at: task.created_at,
       updated_at: task.updated_at
     }
   end
+
+  def self.extract(item)
+    if item.is_a?(Tasks::Occurrence)
+      [ item.task, item.scheduled_at, item.event_number ]
+    else
+      [ item, item.scheduled_at, item.repetition_event_number ]
+    end
+  end
+  private_class_method :extract
 end

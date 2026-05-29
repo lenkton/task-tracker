@@ -13,9 +13,10 @@ module Tasks
       validate_filters
       return ServiceResult.failure(@errors) if @errors.any?
 
-      scope = @scope.includes(:status, :tags).order(:id)
+      scope = @scope.includes(:status, :tags)
       scope = filter_by_statuses(scope)
-      ServiceResult.success(filter_by_scheduled_at(scope))
+      occurrences = one_time_occurrences(scope) + recurring_occurrences(scope)
+      ServiceResult.success(sort_occurrences(occurrences))
     end
 
     private
@@ -24,6 +25,30 @@ module Tasks
       @errors = {}
       @scheduled_from = parse_time(:scheduled_from, @filters[:scheduled_from], boundary: :beginning)
       @scheduled_to = parse_time(:scheduled_to, @filters[:scheduled_to], boundary: :end)
+
+      @errors[:scheduled_from] = [ "can't be blank" ] if @filters[:scheduled_from].blank?
+      @errors[:scheduled_to] = [ "can't be blank" ] if @filters[:scheduled_to].blank?
+      return if @errors.any?
+
+      if @scheduled_from > @scheduled_to
+        @errors[:scheduled_to] = [ "must be on or after scheduled_from" ]
+      end
+    end
+
+    def one_time_occurrences(scope)
+      scope.one_time
+           .where(scheduled_at: @scheduled_from..@scheduled_to)
+           .map { |task| task.build_occurrence(0, task.scheduled_at) }
+    end
+
+    def recurring_occurrences(scope)
+      scope.recurring
+           .where(scheduled_at: ..@scheduled_to)
+           .flat_map { |task| task.generate_occurrences(@scheduled_from, @scheduled_to) }
+    end
+
+    def sort_occurrences(occurrences)
+      occurrences.sort_by { |occurrence| [ occurrence.scheduled_at, occurrence.task.id, occurrence.event_number ] }
     end
 
     def filter_by_statuses(scope)
@@ -31,12 +56,6 @@ module Tasks
       return scope if names.empty?
 
       scope.joins(:status).where(statuses: { name: names })
-    end
-
-    def filter_by_scheduled_at(scope)
-      scope = scope.where(scheduled_at: @scheduled_from..) if @scheduled_from
-      scope = scope.where(scheduled_at: ..@scheduled_to) if @scheduled_to
-      scope
     end
 
     def status_names
