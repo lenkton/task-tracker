@@ -22,6 +22,36 @@ RSpec.describe Tasks::Filter do
       it { expect(standup_occurrences.map(&:scheduled_at).map(&:to_date)).to eq([ Date.new(2026, 5, 24), Date.new(2026, 5, 26), Date.new(2026, 5, 28) ]) }
     end
 
+    context "when a recurring occurrence was customized" do
+      let(:series) { tasks(:daily_standup) }
+
+      before do
+        Tasks::CustomizeOccurrence.call(
+          series:,
+          attributes: {
+            repetition_event_number: 4,
+            name: "Custom standup",
+            scheduled_at: "2026-05-26T10:30:00Z"
+          }
+        )
+      end
+
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
+      it "returns the customized event as a one-time occurrence" do
+        customized = result.value.find { |occurrence| occurrence.task.name == "Custom standup" }
+
+        expect(customized.event_number).to eq(0)
+        expect(customized.scheduled_at).to eq(Time.zone.parse("2026-05-26 10:30:00"))
+      end
+
+      it "skips the generated occurrence with the same event number" do
+        standup_occurrences = result.value.select { |occurrence| occurrence.task.is_a?(Task::Daily) }
+
+        expect(standup_occurrences.map(&:event_number)).to eq([ 3, 5 ])
+      end
+    end
+
     context "with status filter" do
       subject(:result) { described_class.call(scope: Task.all, filters: interval.merge(statuses: "todo")) }
 

@@ -15,7 +15,9 @@ module Tasks
 
       scope = @scope.includes(:status, :tags)
       scope = filter_by_statuses(scope)
-      occurrences = one_time_occurrences(scope) + recurring_occurrences(scope)
+      occurrences = one_time_occurrences(scope) +
+                    customized_occurrences(scope) +
+                    recurring_occurrences(scope)
       ServiceResult.success(sort_occurrences(occurrences))
     end
 
@@ -41,10 +43,32 @@ module Tasks
            .map { |task| task.build_occurrence(0, task.scheduled_at) }
     end
 
+    def customized_occurrences(scope)
+      scope.customized_events
+           .where(scheduled_at: @scheduled_from..@scheduled_to)
+           .map { |task| task.build_occurrence(0, task.scheduled_at) }
+    end
+
     def recurring_occurrences(scope)
-      scope.recurring
-           .where(scheduled_at: ..@scheduled_to)
-           .flat_map { |task| task.generate_occurrences(@scheduled_from, @scheduled_to) }
+      recurring_scope = scope.recurring.where(scheduled_at: ..@scheduled_to)
+      skipped_by_series = customized_event_numbers_by_series(recurring_scope)
+
+      recurring_scope.flat_map do |task|
+        skipped = skipped_by_series[task.id] || []
+        task.generate_occurrences(@scheduled_from, @scheduled_to)
+            .reject { |occurrence| skipped.include?(occurrence.event_number) }
+      end
+    end
+
+    def customized_event_numbers_by_series(recurring_scope)
+      series_ids = recurring_scope.pluck(:id)
+      return {} if series_ids.empty?
+
+      Task::CustomizedEvent
+        .where(series_task_id: series_ids)
+        .pluck(:series_task_id, :repetition_event_number)
+        .group_by(&:first)
+        .transform_values { |pairs| pairs.map(&:last) }
     end
 
     def sort_occurrences(occurrences)

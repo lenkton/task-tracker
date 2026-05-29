@@ -242,6 +242,54 @@ RSpec.describe "Tasks API", type: :request do
       it { expect(task.reload.name).to eq("Updated task name") }
     end
 
+    context "when customizing a recurring occurrence" do
+      let(:series) { tasks(:daily_standup) }
+
+      subject!(:customize_occurrence) do
+        patch task_path(series),
+              params: { repetition_event_number: 4, name: "Custom standup" },
+              as: :json
+      end
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json["name"]).to eq("Custom standup") }
+      it { expect(json["repetition_type"]).to eq("customized_event") }
+      it { expect(json["repetition_data"]).to eq({}) }
+      it { expect(json["series_task_id"]).to eq(series.id) }
+      it { expect(json["repetition_event_number"]).to eq(4) }
+      it { expect(json["scheduled_at"]).to eq("2026-05-26T09:00:00.000Z") }
+
+      it "creates a customized event record" do
+        expect(Task::CustomizedEvent.for_series_and_event(series.id, 4)).to be_present
+      end
+
+      it "does not change the series template" do
+        expect(series.reload.name).to eq("Daily standup")
+      end
+    end
+
+    context "when updating a recurring series without repetition_event_number" do
+      let(:series) { tasks(:daily_standup) }
+
+      before { patch task_path(series), params: { name: "Updated standup series" }, as: :json }
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json["name"]).to eq("Updated standup series") }
+      it { expect(series.reload.name).to eq("Updated standup series") }
+      it { expect(Task::CustomizedEvent.count).to eq(0) }
+    end
+
+    context "when repetition_event_number is sent for a one-time task" do
+      before do
+        patch task_path(task),
+              params: { repetition_event_number: 1, name: "Nope" },
+              as: :json
+      end
+
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to eq({ "series" => [ "must be a recurring task" ] }) }
+    end
+
     context "with invalid params" do
       before { patch task_path(task), params: { name: "" }, as: :json }
 
@@ -283,6 +331,34 @@ RSpec.describe "Tasks API", type: :request do
         it { expect(response).to have_http_status(:unprocessable_content) }
         it { expect(json["errors"]).to include("status") }
       end
+    end
+  end
+
+  describe "GET /tasks with customized occurrences" do
+    let(:series) { tasks(:daily_standup) }
+    let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+
+    before do
+      patch task_path(series),
+            params: { repetition_event_number: 4, name: "Custom standup" },
+            as: :json
+      get tasks_path, params: interval_params
+    end
+
+    it "returns the customized event as one-time" do
+      customized = json.find { |item| item["name"] == "Custom standup" }
+
+      expect(customized).to include(
+        "repetition_type" => "one_time",
+        "repetition_data" => {},
+        "repetition_event_number" => 0
+      )
+    end
+
+    it "does not return the generated occurrence for the same event number" do
+      standup_events = json.select { |item| item["name"] == "Daily standup" }
+
+      expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 5 ])
     end
   end
 

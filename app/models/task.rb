@@ -12,6 +12,13 @@ class Task < ApplicationRecord
   class UnknownRepetitionType < StandardError; end
 
   belongs_to :status
+  belongs_to :series_task, class_name: "Task", optional: true, inverse_of: :customized_occurrences
+  has_many :customized_occurrences,
+           -> { where(repetition_type: "Task::CustomizedEvent") },
+           class_name: "Task",
+           foreign_key: :series_task_id,
+           dependent: :delete_all,
+           inverse_of: :series_task
   # Join-таблица tags_tasks без первичного ключа (create_join_table).
   # dependent: :destroy пытается удалять по id и падает в PostgreSQL.
   has_many :tags_tasks, dependent: :delete_all
@@ -27,6 +34,7 @@ class Task < ApplicationRecord
 
   scope :one_time, -> { where(repetition_type: "Task::OneTime") }
   scope :recurring, -> { where(repetition_type: RECURRING_STI_TYPES) }
+  scope :customized_events, -> { where(repetition_type: "Task::CustomizedEvent") }
 
   def self.class_for_api_type(api_type)
     class_name = REPETITION_TYPE_CLASS_NAMES.fetch(api_type) { raise UnknownRepetitionType }

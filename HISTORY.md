@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/29/2026 at 14:46:44 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/29/2026 at 19:10:20 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1512,4 +1512,188 @@ count = ((last_parity_day - entry_day) / 2) + 1
 Пример: daily standup с 20 мая, интервал 24–28 мая → в ответе `#3, #4, #5` на 24, 26, 28 (раньше было `#2, #3, #4`). Если якорь попадает в интервал (чётные 24 мая) — первое событие `#1` на 24 мая.
 
 109 связанных примеров проходят.
+
+---
+
+**User**
+
+так, а теперь давай поработаем над этими исключениями из повторюшек (@app/models/task/customized_event.rb )
+
+я хочу, чтобы пользователь через апи изменения событий мог редактировать повторения событий.
+
+в этом случае он передаёт в пути айди серии и в теле запроса - repetition_event_number
+
+ну и параметры, которые он хочет поменять.
+
+в результате в базе будет создаваться запись @app/models/task/customized_event.rb , где в repetition_data будет лежать номер изначальной серии
+
+и после этого эти события надо отдавать в апи, как обычные одиночные события.
+
+но надо учитывать это так же в повторяющихся событиях, и не генерировать повторюшку с указанным repetition_event_number
+
+---
+
+**Cursor**
+
+Изучаю текущую структуру API, модели и тесты перед реализацией customized events.
+
+
+Реализую кастомные события: отдельный эндпоинт для редактирования повторения, учёт в фильтре и пропуск сгенерированных слотов.
+
+
+Исправляю `CustomizeOccurrence`: `Tasks::Write` пересобирает STI-класс и сбрасывает поля.
+
+
+Готово: реализованы исключения из повторяющихся серий.
+
+### API
+
+**`PATCH /tasks/:task_id/occurrence`** — `:task_id` это id шаблона серии (daily/monthly/odd_even).
+
+```json
+{
+  "repetition_event_number": 4,
+  "name": "Custom standup",
+  "scheduled_at": "2026-05-26T10:30:00Z",
+  "status": "in_progress",
+  "tags": ["звонок"]
+}
+```
+
+- Первый вызов создаёт `Task::CustomizedEvent`
+- Повторный с тем же `repetition_event_number` обновляет существующую запись
+- В ответе — полная запись с `repetition_type: "customized_event"`, `repetition_data: { "series_task_id": … }`, `repetition_event_number`
+
+### Хранение
+
+- `repetition_data["series_task_id"]` — ссылка на серию
+- `repetition_event_number` — номер события в серии (1, 2, 3… как в API повторений)
+- Если `scheduled_at` не передан, берётся время из генератора серии
+
+### `GET /tasks`
+
+- Кастомные события отдаются **как one-time**: `repetition_type: "one_time"`, `repetition_event_number: 0`, пустой `repetition_data`
+- Сгенерированное повторение с тем же номером **не включается** в список
+
+Пример: для daily standup с period 2 в интервале 24–28 мая после кастомизации #4 в ответе будут события `#3, #5` от серии и отдельная запись «Custom standup».
+
+### Файлы
+
+- `Tasks::CustomizeOccurrence` — создание/обновление
+- `Tasks::OccurrencesController` — эндпоинт
+- `Task::CustomizedEvent` — валидации и поиск по серии + номеру
+- `Tasks::Filter` — customized в выдаче + пропуск слотов
+- `TaskSerializer` — one-time-представление в списке
+
+202 теста проходят.
+
+---
+
+**User**
+
+слушай, а можно сделать так, чтобы это не через отдельную ручку работало, а через patch tasks/:id
+
+---
+
+**Cursor**
+
+Переносим кастомизацию повторений на `PATCH /tasks/:id`: при наличии `repetition_event_number` в теле — создаём/обновляем исключение, иначе обновляем шаблон серии.
+
+
+Готово. Кастомизация повторений теперь идёт через обычный **`PATCH /tasks/:id`**.
+
+### Как работает
+
+**Редактирование отдельного повторения** — `:id` это id серии, в теле передаётся `repetition_event_number`:
+
+```json
+PATCH /tasks/3
+{
+  "repetition_event_number": 4,
+  "name": "Custom standup",
+  "scheduled_at": "2026-05-26T10:30:00Z"
+}
+```
+
+Если `repetition_event_number` положительный — создаётся/обновляется `Task::CustomizedEvent`, шаблон серии не меняется.
+
+**Редактирование шаблона серии** — тот же эндпоинт, но **без** `repetition_event_number`:
+
+```json
+PATCH /tasks/3
+{ "name": "Updated standup series" }
+```
+
+### Что убрано
+
+- Маршрут `PATCH /tasks/:task_id/occurrence`
+- `Tasks::OccurrencesController`
+
+205 тестов проходят.
+
+---
+
+**User**
+
+и знаешь, я что подумал? давай лучше добавим в таблицу tasks поле для родительского шаблона для кастомизированных ивентов. чтобы была ссылочная целостность и всё такое
+
+ну и уберем эти данные из того жисона в базе
+
+---
+
+**Cursor**
+
+Добавим колонку `series_task_id` с FK вместо хранения в `repetition_data`. Сначала посмотрю текущую схему и все места, где используется связь с серией.
+
+
+Готово. Связь с серией теперь через колонку в БД, а не через JSON.
+
+### Миграция
+
+- Колонка `series_task_id` — nullable FK на `tasks` с `ON DELETE CASCADE`
+- Уникальный индекс на `(series_task_id, repetition_event_number)` для кастомных событий
+
+### Модель
+
+- `Task` — `belongs_to :series_task`, `has_many :customized_occurrences`
+- `Task::CustomizedEvent` — `series_task_id` обязателен, `repetition_data` должен быть пустым
+- Поиск через `for_series` / `for_series_and_event` по колонке
+
+### API
+
+В ответе кастомного события:
+
+```json
+{
+  "repetition_type": "customized_event",
+  "repetition_data": {},
+  "series_task_id": 3,
+  "repetition_event_number": 4
+}
+```
+
+В списке `GET /tasks` кастомные по-прежнему выглядят как one-time (`series_task_id: null`).
+
+209 тестов проходят.
+
+---
+
+**User**
+
+@app/models/task/customized_event.rb:28-34 пользуйся дефолтными валидациями по возможности
+
+---
+
+**Cursor**
+
+Заменяю кастомные валидации на стандартные Rails: `validates` и обязательный `belongs_to`.
+
+
+Заменил кастомные проверки на стандартные Rails-механизмы:
+
+- **`belongs_to :series_task, optional: false`** — вместо `series_task_must_be_present`
+- **`validates :repetition_event_number, numericality: { greater_than: 0 }`** — вместо `repetition_event_number_must_be_positive`
+- **`validates :repetition_event_number, uniqueness: { scope: :series_task_id }`** — вместо `series_event_must_be_unique`
+
+Кастомными остались только те проверки, для которых нет готовых валидаторов: пустой `repetition_data` и то, что серия должна быть recurring.
 

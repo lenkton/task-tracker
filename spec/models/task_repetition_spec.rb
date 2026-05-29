@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe Task do
-  fixtures :statuses
+  fixtures :statuses, :tasks
 
   let(:status) { statuses(:todo) }
   let(:base_attributes) do
@@ -215,9 +215,41 @@ RSpec.describe Task do
   end
 
   describe Task::CustomizedEvent do
-    subject(:task) { described_class.new(base_attributes.merge(repetition_data: {}, repetition_event_number: 3)) }
+    let(:series) { tasks(:daily_standup) }
+
+    subject(:task) do
+      described_class.new(
+        base_attributes.merge(
+          series_task: series,
+          repetition_data: {},
+          repetition_event_number: 3
+        )
+      )
+    end
 
     it { expect(task).to be_valid }
+
+    context "without series_task_id" do
+      subject!(:invalid_task) do
+        task.series_task = nil
+        task.valid?
+        task
+      end
+
+      it { expect(invalid_task).not_to be_valid }
+      it { expect(invalid_task.errors[:series_task]).to include("must exist") }
+    end
+
+    context "with repetition_data" do
+      subject!(:invalid_task) do
+        task.repetition_data = { "period" => 1 }
+        task.valid?
+        task
+      end
+
+      it { expect(invalid_task).not_to be_valid }
+      it { expect(invalid_task.errors[:repetition_data]).to include("must be empty") }
+    end
 
     context "without repetition_event_number" do
       subject!(:invalid_task) do

@@ -26,7 +26,11 @@ class TasksController < ApplicationController
   end
 
   def update
-    result = Tasks::Write.call(task: @task, attributes: task_params)
+    result = if customize_occurrence?
+               Tasks::CustomizeOccurrence.call(series: @task, attributes: task_params)
+             else
+               Tasks::Write.call(task: @task, attributes: task_params)
+             end
 
     if result.success?
       render json: TaskSerializer.call(result.value)
@@ -49,10 +53,15 @@ class TasksController < ApplicationController
   def task_params
     params.permit(
       :name, :description, :scheduled_at, :status,
-      :repetition_type,
+      :repetition_type, :repetition_event_number,
       tags: [],
       repetition_data: {}
     )
+  end
+
+  def customize_occurrence?
+    repetition_event_number = params[:repetition_event_number]
+    repetition_event_number.present? && repetition_event_number.to_i.positive?
   end
 
   def filter_params
