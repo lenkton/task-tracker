@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/29/2026 at 19:31:56 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/29/2026 at 19:54:06 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1741,4 +1741,34 @@ PATCH /tasks/3
 **`PATCH /tasks/:id`** и **`GET /tasks/:id`** — то же самое.
 
 В БД по-прежнему `Task::CustomizedEvent`; меняется только представление в API.
+
+---
+
+**User**
+
+ну и да, давай для таких кастомизированных событий в поле id будем передавать номер серии
+
+---
+
+**Cursor**
+
+Добавляю в сериалайзер подстановку `id` серии для кастомных событий.
+
+
+Готово. Для `Task::CustomizedEvent` в API поле `id` теперь — id серии, а не записи кастомизации.
+
+Пример ответа после `PATCH /tasks/:series_id`:
+
+```json
+{
+  "id": 3,
+  "name": "Custom standup",
+  "repetition_type": "daily",
+  "repetition_data": { "period": 2 },
+  "repetition_event_number": 4,
+  "series_task_id": 3
+}
+```
+
+То же в `GET /tasks` и `GET /tasks/:id` для кастомных событий. Для сгенерированных повторений и one-time `id` по-прежнему id шаблона/задачи в БД.
 

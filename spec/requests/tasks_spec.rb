@@ -252,6 +252,7 @@ RSpec.describe "Tasks API", type: :request do
       end
 
       it { expect(response).to have_http_status(:ok) }
+      it { expect(json["id"]).to eq(series.id) }
       it { expect(json["name"]).to eq("Custom standup") }
       it { expect(json["repetition_type"]).to eq("daily") }
       it { expect(json["repetition_data"]).to eq({ "period" => 2 }) }
@@ -349,6 +350,7 @@ RSpec.describe "Tasks API", type: :request do
       customized = json.find { |item| item["name"] == "Custom standup" }
 
       expect(customized).to include(
+        "id" => series.id,
         "repetition_type" => "daily",
         "repetition_data" => { "period" => 2 },
         "repetition_event_number" => 4,

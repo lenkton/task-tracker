@@ -7,7 +7,7 @@ class TaskSerializer
     task, scheduled_at, event_number = extract(item)
 
     {
-      id: task.id,
+      id: api_id_for(task),
       name: task.name,
       description: task.description,
       scheduled_at: scheduled_at,
@@ -21,6 +21,11 @@ class TaskSerializer
       updated_at: task.updated_at
     }
   end
+
+  def self.api_id_for(task)
+    task.is_a?(Task::CustomizedEvent) ? task.series_task_id : task.id
+  end
+  private_class_method :api_id_for
 
   def self.extract(item)
     if item.is_a?(Tasks::Occurrence)
