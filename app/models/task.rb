@@ -41,6 +41,11 @@ class Task < ApplicationRecord
     Tasks::Occurrence.new(task: self, event_number:, scheduled_at:)
   end
 
+  # series_index 0 — якорь в БД; в API отдаём как repetition_event_number 1.
+  def build_recurring_occurrence(series_index, scheduled_at)
+    build_occurrence(series_index + 1, scheduled_at)
+  end
+
   def generate_occurrences(from, to)
     raise NotImplementedError
   end

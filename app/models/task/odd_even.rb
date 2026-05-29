@@ -12,7 +12,7 @@ class Task::OddEven < Task
     occurrences = []
 
     while time <= to
-      occurrences << build_occurrence(event_number, time)
+      occurrences << build_recurring_occurrence(event_number, time)
       event_number += 1
       time = next_parity_occurrence_after(time)
     end

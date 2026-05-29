@@ -68,7 +68,7 @@ RSpec.describe Task do
       let(:from) { Time.zone.parse("2026-05-24 00:00:00") }
       let(:to) { Time.zone.parse("2026-05-28 23:59:59") }
 
-      it { expect(occurrences.map(&:event_number)).to eq([ 2, 3, 4 ]) }
+      it { expect(occurrences.map(&:event_number)).to eq([ 3, 4, 5 ]) }
 
       it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
     end
@@ -110,7 +110,7 @@ RSpec.describe Task do
         ].map { |value| Time.zone.parse(value) }
       end
 
-      it { expect(occurrences.map(&:event_number)).to eq([ 2, 3 ]) }
+      it { expect(occurrences.map(&:event_number)).to eq([ 3, 4 ]) }
 
       it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
     end
@@ -154,7 +154,7 @@ RSpec.describe Task do
           ].map { |value| Time.zone.parse(value) }
         end
 
-        it { expect(occurrences.map(&:event_number)).to eq([ 0, 1, 2 ]) }
+        it { expect(occurrences.map(&:event_number)).to eq([ 1, 2, 3 ]) }
 
         it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
       end
@@ -181,7 +181,7 @@ RSpec.describe Task do
           ].map { |value| Time.zone.parse(value) }
         end
 
-        it { expect(occurrences.map(&:event_number)).to eq([ 0, 1, 2, 3 ]) }
+        it { expect(occurrences.map(&:event_number)).to eq([ 1, 2, 3, 4 ]) }
 
         it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
       end
@@ -200,7 +200,7 @@ RSpec.describe Task do
         let(:from) { Time.zone.parse("2026-05-31 00:00:00") }
         let(:to) { Time.zone.parse("2026-06-02 23:59:59") }
 
-        it { expect(occurrences.map(&:event_number)).to eq([ 0, 1 ]) }
+        it { expect(occurrences.map(&:event_number)).to eq([ 1, 2 ]) }
 
         it do
           expect(occurrences.map(&:scheduled_at)).to eq(

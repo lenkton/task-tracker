@@ -10,7 +10,7 @@ class Task::Daily < Task
     k_max = ((to - start) / period).floor
     return [] if k_min > k_max
 
-    (k_min..k_max).map { |k| build_occurrence(k, start + k * period) }
+    (k_min..k_max).map { |k| build_recurring_occurrence(k, start + k * period) }
   end
 
   private

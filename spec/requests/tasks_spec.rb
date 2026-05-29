@@ -40,7 +40,7 @@ RSpec.describe "Tasks API", type: :request do
       it "assigns repetition_event_number to generated occurrences" do
         standup_events = json.select { |item| item["name"] == "Daily standup" }
 
-        expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 2, 3, 4 ])
+        expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 4, 5 ])
       end
     end
 

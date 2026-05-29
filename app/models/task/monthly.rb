@@ -11,7 +11,7 @@ class Task::Monthly < Task
     while month <= to.beginning_of_month
       time = occurrence_time_in_month(month, day)
       if time && time.between?(from, to) && time >= scheduled_at
-        occurrences << build_occurrence(event_number_for(time), time)
+        occurrences << build_recurring_occurrence(event_number_for(time), time)
       end
 
       month = month.next_month

@@ -18,7 +18,7 @@ RSpec.describe Tasks::Filter do
         described_class.call(scope: Task.all, filters: interval).value.select { |occurrence| occurrence.task.name == "Daily standup" }
       end
 
-      it { expect(standup_occurrences.map(&:event_number)).to eq([ 2, 3, 4 ]) }
+      it { expect(standup_occurrences.map(&:event_number)).to eq([ 3, 4, 5 ]) }
       it { expect(standup_occurrences.map(&:scheduled_at).map(&:to_date)).to eq([ Date.new(2026, 5, 24), Date.new(2026, 5, 26), Date.new(2026, 5, 28) ]) }
     end
 
