@@ -1,186 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/29/2026 at 19:54:06 GMT+3 from Cursor (3.2.21)_
-
----
-
-**User**
-
-@db/migrate/20260523094307_create_statuses.rb напиши сиды для этой миграции
-
----
-
-**Cursor**
-
-Просматриваю миграцию и структуру проекта, чтобы написать сиды.
-
-
-Добавляю идемпотентные сиды со стандартными статусами таск-трекера (нижний регистр, по README).
-
-
-В `db/seeds.rb` добавлены идемпотентные сиды для четырёх базовых статусов:
-
-| name | смысл |
-|------|--------|
-| `todo` | ещё не начата |
-| `in_progress` | в работе |
-| `done` | завершена |
-| `cancelled` | отменена |
-
-Имена в нижнем регистре и на английском — как в README. Запись через `find_or_create_by!`, поэтому `bin/rails db:seed` можно запускать повторно.
-
-```ruby
-%w[todo in_progress done cancelled].each do |status_name|
-  Status.find_or_create_by!(name: status_name)
-end
-```
-
-Сиды уже прогнаны — в базе есть эти четыре статуса (плюс `new`, если он был создан раньше вручную). Если нужен другой набор (например, `backlog` / `review` вместо `cancelled`), напиши — поправлю.
-
----
-
-**User**
-
-@db/migrate/20260523102749_create_tasks.rb добавь модель
-
----
-
-**Cursor**
-
-Добавляю модель `Task` и связь в `Status`.
-
-
-Добавлена модель `Task` и обратная связь в `Status`.
-
-**`app/models/task.rb`**
-- `belongs_to :status`
-- валидации `name` и `scheduled_at` (обязательные поля)
-- `description` не валидируется на presence — в миграции для него задан `default: ""`
-
-**`app/models/status.rb`**
-- `has_many :tasks, dependent: :restrict_with_error` — статус с задачами нельзя удалить без явной обработки
-
-Миграция применена, модель в консоли проходит валидацию.
-
----
-
-**User**
-
-а добавь для задач пару записей для девелопмент окружения
-
-а добавь для задач пару записей для девелопмент окружения в сиды
-
----
-
-**Cursor**
-
-В `db/seeds.rb` добавлен блок только для `development`: две задачи с разными статусами, через `find_or_create_by!` по `name` — повторный `db:seed` не создаёт дубликаты.
-
-| Задача | Статус |
-|--------|--------|
-| Review pull requests | `todo` |
-| Implement task tracker API | `in_progress` |
-
-В production и test эти записи не создаются.
-
----
-
-**User**
-
-так, а можешь написать простенький CRUDL для задач? и тесты под это дело
-
----
-
-**Cursor**
-
-Изучаю структуру проекта и существующие соглашения перед добавлением CRUDL для задач.
-
-
-API-only приложение — делаю JSON CRUDL и integration-тесты.
-
-
-Тесты запустились; исправляю хрупкую проверку порядка в index.
-
-
-Готово: JSON API для задач и 8 integration-тестов (все проходят).
-
-### Эндпоинты
-
-| Метод | Путь | Действие |
-|-------|------|----------|
-| `GET` | `/tasks` | список |
-| `GET` | `/tasks/:id` | одна задача |
-| `POST` | `/tasks` | создать |
-| `PATCH/PUT` | `/tasks/:id` | обновить |
-| `DELETE` | `/tasks/:id` | удалить |
-
-Тело запроса (JSON):
-
-```json
-{
-  "task": {
-    "name": "Write tests",
-    "description": "Optional text",
-    "scheduled_at": "2026-05-26T09:00:00Z",
-    "status_id": 1
-  }
-}
-```
-
-Ответ включает вложенный `status` с полями `id` и `name`. Ошибки валидации — `422` с `{ "errors": { ... } }`, несуществующая задача — `404`.
-
-### Что добавлено
-
-- `app/controllers/tasks_controller.rb`
-- `config/routes.rb` — `resources :tasks`
-- `test/fixtures/statuses.yml`, `test/fixtures/tasks.yml`
-- `test/controllers/tasks_controller_test.rb` — index, show, create, update, destroy + ошибки валидации и 404
-
-Пример:
-
-```bash
-curl -s http://localhost:3000/tasks | jq
-curl -s -X POST http://localhost:3000/tasks \
-  -H "Content-Type: application/json" \
-  -d '{"task":{"name":"New task","scheduled_at":"2026-05-26T09:00:00Z","status_id":1}}'
-```
-
----
-
-**User**
-
-перепиши тесты на rspec
-
----
-
-**Cursor**
-
-Проверяю текущую настройку RSpec и существующие тесты.
-
-
-Создаю RSpec request-спеки, переношу фикстуры и обновляю CI.
-
-
-Тесты перенесены с Minitest на RSpec.
-
-### Что сделано
-
-- **`spec/requests/tasks_spec.rb`** — те же 8 сценариев, что были в integration-тестах
-- **`spec/fixtures/`** — фикстуры перенесены из `test/fixtures/`
-- **Удалена папка `test/`** (minitest больше не используется)
-- **`.rspec`** — подключает `rails_helper`
-- **`spec/rails_helper.rb`** — включён `infer_spec_type_from_file_location!`
-- **CI** (`config/ci.rb`, `.github/workflows/ci.yml`) — запуск через `bundle exec rspec`
-- **`.rubocop.yml`** — для `spec/requests` отключены `ExampleLength` и `MultipleExpectations` (типично для API-спеков)
-
-Запуск:
-
-```bash
-bundle exec rspec
-# или один файл:
-bundle exec rspec spec/requests/tasks_spec.rb
-```
-
-Все 8 примеров проходят.
+_Exported on 5/29/2026 at 23:52:59 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1771,4 +1590,131 @@ PATCH /tasks/3
 ```
 
 То же в `GET /tasks` и `GET /tasks/:id` для кастомных событий. Для сгенерированных повторений и one-time `id` по-прежнему id шаблона/задачи в БД.
+
+---
+
+**User**
+
+А добавь-ка модель пользователя с какой-нибудь простой авторизацией по токену
+
+---
+
+**Cursor**
+
+Изучаю структуру приложения, чтобы добавить модель пользователя и простую авторизацию по токену.
+
+
+Создаю модель User, авторизацию по Bearer-токену и обновляю тесты.
+
+
+Готово: добавлена модель пользователя и простая авторизация по Bearer-токену.
+
+### Модель `User`
+- Поля: `email`, `name`, `password_digest`, `auth_token`
+- `has_secure_password` (bcrypt)
+- При создании генерируется уникальный `auth_token` (`SecureRandom.hex(32)`)
+- Email нормализуется (trim + downcase)
+
+### Авторизация
+Все эндпоинты `tasks` и `tags` требуют заголовок:
+
+```
+Authorization: Bearer <auth_token>
+```
+
+Без токена или с неверным — `401 Unauthorized`.
+
+`/up` и `POST /session` — без авторизации.
+
+### Логин
+
+```bash
+curl -X POST http://localhost:3000/session \
+  -H "Content-Type: application/json" \
+  -d '{"email":"dev@example.com","password":"password"}'
+```
+
+Ответ:
+
+```json
+{
+  "auth_token": "...",
+  "user": { "id": 1, "email": "dev@example.com", "name": "Developer" }
+}
+```
+
+Дальше этот `auth_token` передаётся в `Authorization: Bearer ...`.
+
+### Dev-сид
+В development создаётся пользователь `dev@example.com` / `password` (после `bin/rails db:seed`).
+
+### Файлы
+- `app/models/user.rb`
+- `app/controllers/concerns/authenticatable.rb`
+- `app/controllers/sessions_controller.rb`
+- `db/migrate/20260530120000_create_users.rb`
+- Тесты: `spec/models/user_spec.rb`, `spec/requests/sessions_spec.rb`, `spec/requests/authentication_spec.rb`
+
+224 примера RSpec проходят. Не забудь прогнать миграцию в dev: `bin/rails db:migrate`.
+
+---
+
+**User**
+
+слушай, а упрости решение, чтобы не было паролей
+
+только токена хватит
+
+---
+
+**Cursor**
+
+Убираю пароли и оставляю только токен — сначала посмотрю текущую реализацию.
+
+
+Убираю пароли и логин — остаётся только Bearer-токен.
+
+
+Упростил: паролей и логина больше нет, только Bearer-токен.
+
+### Что изменилось
+- Убраны `has_secure_password`, `bcrypt`, `password_digest`
+- Удалены `POST /session`, `SessionsController`, `UserSerializer`
+- У пользователя только `email`, `name`, `auth_token` (генерируется при создании)
+
+### Как пользоваться
+Все эндпоинты `tasks` и `tags` требуют заголовок:
+
+```
+Authorization: Bearer <auth_token>
+```
+
+В dev после `bin/rails db:seed` будет пользователь с фиксированным токеном:
+
+```
+Authorization: Bearer dev-token
+```
+
+Токен можно посмотреть в консоли: `User.find_by!(email: "dev@example.com").auth_token`.
+
+217 тестов проходят. В dev прогони `bin/rails db:migrate`, если ещё не делал.
+
+---
+
+**User**
+
+@db/migrate/20260530170914_remove_password_digest_from_users.rb слей с предыдущей миграцией (я ее не накатывал на прод
+
+---
+
+**Cursor**
+
+В `create_users` уже нет `password_digest` — удаляю лишнюю миграцию и обновляю версию в `schema.rb`.
+
+
+Готово. Лишняя миграция удалена — в `create_users` уже нет `password_digest`, отдельная миграция не нужна.
+
+Осталась одна миграция: `20260530120000_create_users.rb` с полями `email`, `name`, `auth_token`.
+
+В `schema.rb` версия обновлена на `2026_05_30_120000`. Если локально уже накатывал remove-миграцию, можно просто удалить её запись из `schema_migrations` — в test я это уже сделал.
 

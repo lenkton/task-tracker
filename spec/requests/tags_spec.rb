@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Tags API", type: :request do
-  fixtures :tags
+  fixtures :tags, :users
 
   let(:custom_tag) { tags(:custom) }
   let(:system_tag) { tags(:reporting) }

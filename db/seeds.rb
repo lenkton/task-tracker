@@ -11,6 +11,11 @@ Tag::SYSTEM_NAMES.each do |tag_name|
 end
 
 if Rails.env.development?
+  User.find_or_create_by!(email: "dev@example.com") do |user|
+    user.name = "Developer"
+    user.auth_token = "dev-token"
+  end
+
   [
     {
       name: "Review pull requests",

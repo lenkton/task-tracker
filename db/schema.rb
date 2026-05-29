@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_29_120630) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_30_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -49,6 +49,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_29_120630) do
     t.index ["series_task_id", "repetition_event_number"], name: "index_tasks_on_series_task_id_and_repetition_event_number", unique: true, where: "(series_task_id IS NOT NULL)"
     t.index ["series_task_id"], name: "index_tasks_on_series_task_id"
     t.index ["status_id"], name: "index_tasks_on_status_id"
+  end
+
+  create_table "users", force: :cascade do |t|
+    t.string "auth_token", null: false
+    t.datetime "created_at", null: false
+    t.string "email", null: false
+    t.string "name", null: false
+    t.datetime "updated_at", null: false
+    t.index ["auth_token"], name: "index_users_on_auth_token", unique: true
+    t.index ["email"], name: "index_users_on_email", unique: true
   end
 
   add_foreign_key "tasks", "statuses"
