@@ -13,6 +13,10 @@ class Task::Daily < Task
     (k_min..k_max).map { |k| build_recurring_occurrence(k, start + k * period) }
   end
 
+  def scheduled_at_for_event_number(event_number)
+    scheduled_at + (event_number - 1) * repetition_data["period"].days
+  end
+
   private
 
   def repetition_data_must_include_period

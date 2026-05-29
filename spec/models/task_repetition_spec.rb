@@ -74,6 +74,29 @@ RSpec.describe Task do
 
       it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
     end
+
+    describe "#find_occurrence_by_event_number" do
+      subject(:task) do
+        described_class.new(
+          base_attributes.merge(
+            repetition_data: { "period" => 2 },
+            repetition_event_number: 0,
+            scheduled_at: Time.zone.parse("2026-05-20 09:00:00")
+          )
+        )
+      end
+
+      it "returns the occurrence at the requested event number" do
+        occurrence = task.find_occurrence_by_event_number(4)
+
+        expect(occurrence.event_number).to eq(4)
+        expect(occurrence.scheduled_at).to eq(Time.zone.parse("2026-05-26 09:00:00"))
+      end
+
+      it "returns nil for event number zero" do
+        expect(task.find_occurrence_by_event_number(0)).to be_nil
+      end
+    end
   end
 
   describe Task::Monthly do
@@ -115,6 +138,32 @@ RSpec.describe Task do
       it { expect(occurrences.map(&:event_number)).to eq([ 3, 4 ]) }
 
       it { expect(occurrences.map(&:scheduled_at)).to eq(expected_scheduled_at) }
+    end
+
+    describe "#find_occurrence_by_event_number" do
+      subject(:task) do
+        described_class.new(
+          base_attributes.merge(
+            repetition_data: { "day_of_month" => 15 },
+            repetition_event_number: 0,
+            scheduled_at: Time.zone.parse("2026-04-15 10:00:00")
+          )
+        )
+      end
+
+      it "returns the occurrence at the requested event number" do
+        occurrence = task.find_occurrence_by_event_number(4)
+
+        expect(occurrence.event_number).to eq(4)
+        expect(occurrence.scheduled_at).to eq(Time.zone.parse("2026-07-15 10:00:00"))
+      end
+
+      it "returns nil when the day does not exist in the target month" do
+        task.repetition_data = { "day_of_month" => 31 }
+        task.scheduled_at = Time.zone.parse("2026-01-31 10:00:00")
+
+        expect(task.find_occurrence_by_event_number(2)).to be_nil
+      end
     end
   end
 
@@ -212,6 +261,42 @@ RSpec.describe Task do
             ].map { |value| Time.zone.parse(value) }
           )
         end
+      end
+    end
+
+    describe "#find_occurrence_by_event_number" do
+      it "returns the occurrence at the requested event number" do
+        task = described_class.new(
+          base_attributes.merge(
+            repetition_data: { "parity" => "odd" },
+            repetition_event_number: 0,
+            scheduled_at: Time.zone.parse("2026-05-31 10:00:00")
+          )
+        )
+
+        occurrence = task.find_occurrence_by_event_number(2)
+
+        expect(occurrence.event_number).to eq(2)
+        expect(occurrence.scheduled_at).to eq(Time.zone.parse("2026-06-01 10:00:00"))
+      end
+
+      it "finds a far future occurrence without iterating from the anchor" do
+        task = described_class.new(
+          base_attributes.merge(
+            repetition_data: { "parity" => "odd" },
+            repetition_event_number: 0,
+            scheduled_at: Time.zone.parse("2020-05-01 10:00:00")
+          )
+        )
+        from = Time.zone.parse("2020-01-01")
+        to = Time.zone.parse("2040-12-31")
+        event_number = 500
+        expected = task.generate_occurrences(from, to).find { |item| item.event_number == event_number }
+
+        occurrence = task.find_occurrence_by_event_number(event_number)
+
+        expect(occurrence.event_number).to eq(event_number)
+        expect(occurrence.scheduled_at).to eq(expected.scheduled_at)
       end
     end
   end

@@ -93,6 +93,65 @@ RSpec.describe "Tasks API", type: :request do
 
       it { expect(response).to have_http_status(:not_found) }
     end
+
+    context "when fetching a generated recurring occurrence" do
+      let(:series) { tasks(:daily_standup) }
+
+      before { get task_path(series), params: { repetition_event_number: 4 } }
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json["id"]).to eq(series.id) }
+      it { expect(json["name"]).to eq("Daily standup") }
+      it { expect(json["repetition_type"]).to eq("daily") }
+      it { expect(json["repetition_data"]).to eq({ "period" => 2 }) }
+      it { expect(json["repetition_event_number"]).to eq(4) }
+      it { expect(json["series_task_id"]).to eq(series.id) }
+      it { expect(json["scheduled_at"]).to eq("2026-05-26T09:00:00.000Z") }
+    end
+
+    context "when fetching a customized occurrence" do
+      let(:series) { tasks(:daily_standup) }
+
+      before do
+        patch task_path(series),
+              params: { repetition_event_number: 4, name: "Custom standup" },
+              as: :json
+        get task_path(series), params: { repetition_event_number: 4 }
+      end
+
+      it { expect(response).to have_http_status(:ok) }
+      it { expect(json["id"]).to eq(series.id) }
+      it { expect(json["name"]).to eq("Custom standup") }
+      it { expect(json["repetition_type"]).to eq("daily") }
+      it { expect(json["repetition_event_number"]).to eq(4) }
+      it { expect(json["series_task_id"]).to eq(series.id) }
+    end
+
+    context "when repetition_event_number does not exist for the series" do
+      let(:series) do
+        Task::Monthly.create!(
+          name: "Monthly report",
+          description: "",
+          scheduled_at: Time.zone.parse("2026-01-31 10:00:00"),
+          status: statuses(:todo),
+          user: users(:one),
+          repetition_data: { "day_of_month" => 31 },
+          repetition_event_number: 0
+        )
+      end
+
+      before { get task_path(series), params: { repetition_event_number: 2 } }
+
+      it { expect(response).to have_http_status(:not_found) }
+      it { expect(json["errors"]).to eq({ "repetition_event_number" => [ "does not exist for this series" ] }) }
+    end
+
+    context "when repetition_event_number is sent for a one-time task" do
+      before { get task_path(task), params: { repetition_event_number: 1 } }
+
+      it { expect(response).to have_http_status(:not_found) }
+      it { expect(json["errors"]).to eq({ "repetition_event_number" => [ "does not exist for this series" ] }) }
+    end
   end
 
   describe "POST /tasks" do

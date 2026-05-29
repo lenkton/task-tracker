@@ -74,10 +74,7 @@ module Tasks
     end
 
     def default_scheduled_at
-      from = @series.scheduled_at
-      to = from + 20.years
-      occurrence = @series.generate_occurrences(from, to).find { |item| item.event_number == @event_number }
-      occurrence&.scheduled_at
+      @series.find_occurrence_by_event_number(@event_number)&.scheduled_at
     end
 
     def apply_attributes(task)

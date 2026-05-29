@@ -12,7 +12,11 @@ class TasksController < ApplicationController
   end
 
   def show
-    render json: TaskSerializer.call(@task)
+    if occurrence_request?
+      render_occurrence
+    else
+      render json: TaskSerializer.call(@task)
+    end
   end
 
   def create
@@ -59,9 +63,25 @@ class TasksController < ApplicationController
     )
   end
 
+  def occurrence_request?
+    params[:repetition_event_number].present? && params[:repetition_event_number].to_i.positive?
+  end
+
   def customize_occurrence?
-    repetition_event_number = params[:repetition_event_number]
-    repetition_event_number.present? && repetition_event_number.to_i.positive?
+    occurrence_request?
+  end
+
+  def render_occurrence
+    result = Tasks::ResolveOccurrence.call(
+      series: @task,
+      event_number: params[:repetition_event_number].to_i
+    )
+
+    if result.success?
+      render json: TaskSerializer.call(result.value)
+    else
+      render json: { errors: result.errors }, status: :not_found
+    end
   end
 
   def filter_params

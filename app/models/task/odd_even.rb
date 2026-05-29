@@ -20,7 +20,52 @@ class Task::OddEven < Task
     occurrences
   end
 
+  def scheduled_at_for_event_number(event_number)
+    occurrence_at_series_index(event_number - 1)
+  end
+
   private
+
+  def occurrence_at_series_index(target_index)
+    return scheduled_at if target_index.zero?
+
+    remaining = target_index
+    time = scheduled_at
+    month_cursor = time.to_date.beginning_of_month
+    month_end = month_cursor.end_of_month
+    entry_day = time.to_date.day
+    last_parity_day = last_parity_day_in_month(month_end)
+
+    if entry_day <= last_parity_day
+      count_in_anchor_month = ((last_parity_day - entry_day) / 2) + 1
+
+      if remaining < count_in_anchor_month
+        day = entry_day + (remaining * 2)
+        return occurrence_time_on(Date.new(month_end.year, month_end.month, day))
+      end
+
+      remaining -= count_in_anchor_month
+    end
+
+    month_cursor = month_cursor.next_month
+
+    loop do
+      month_end_date = month_cursor.end_of_month
+      count = full_month_occurrence_count(month_end_date.day)
+
+      if remaining < count
+        day = first_parity_day_in_month(month_cursor) + (remaining * 2)
+        return occurrence_time_on(Date.new(month_cursor.year, month_cursor.month, day))
+      end
+
+      remaining -= count
+      month_cursor = month_cursor.next_month
+    end
+  end
+
+  def first_parity_day_in_month(_month_date)
+    parity_odd? ? 1 : 2
+  end
 
   def fast_forward_to(from)
     start = scheduled_at

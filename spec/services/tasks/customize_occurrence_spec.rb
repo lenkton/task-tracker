@@ -73,10 +73,22 @@ RSpec.describe Tasks::CustomizeOccurrence do
     end
 
     context "when repetition_event_number does not exist for the series" do
+      let(:series) do
+        Task::Monthly.create!(
+          name: "Monthly report",
+          description: "",
+          scheduled_at: Time.zone.parse("2026-01-31 10:00:00"),
+          status: statuses(:todo),
+          user: users(:one),
+          repetition_data: { "day_of_month" => 31 },
+          repetition_event_number: 0
+        )
+      end
+
       subject(:result) do
         described_class.call(
           series:,
-          attributes: { repetition_event_number: 10_000, name: "Nope" }
+          attributes: { repetition_event_number: 2, name: "Nope" }
         )
       end
 

@@ -66,4 +66,18 @@ class Task < ApplicationRecord
   def generate_occurrences(from, to)
     raise NotImplementedError
   end
+
+  def find_occurrence_by_event_number(event_number)
+    event_number = event_number.to_i
+    return nil if event_number < 1
+
+    scheduled_time = scheduled_at_for_event_number(event_number)
+    return nil unless scheduled_time
+
+    build_recurring_occurrence(event_number - 1, scheduled_time)
+  end
+
+  def scheduled_at_for_event_number(_event_number)
+    nil
+  end
 end

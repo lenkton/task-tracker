@@ -20,6 +20,14 @@ class Task::Monthly < Task
     occurrences
   end
 
+  def scheduled_at_for_event_number(event_number)
+    target_month = scheduled_at.to_date.beginning_of_month + (event_number - 1).months
+    day = repetition_data["day_of_month"]
+    return nil unless Date.valid_date?(target_month.year, target_month.month, day)
+
+    occurrence_time_in_month(target_month, day)
+  end
+
   private
 
   def occurrence_time_in_month(month, day)
