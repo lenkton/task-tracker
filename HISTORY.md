@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/30/2026 at 00:22:15 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/30/2026 at 00:28:56 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1815,4 +1815,27 @@ Tasks::Write.call(task: Task.new(user: current_user), attributes: task_params)
 - Второй пользователь `other-token` — для теста изоляции
 
 220 примеров проходят.
+
+---
+
+**User**
+
+так, а слушай. а давай для ocurrance, которые не кастомизированные, тоже будем заполнять поле series_task_id
+
+---
+
+**Cursor**
+
+Добавлю `series_task_id` для сгенерированных повторений в сериалайзере и покрою это тестами.
+
+
+Готово. В `GET /tasks` у сгенерированных повторений теперь тоже есть `series_task_id`.
+
+### Логика в `TaskSerializer`
+- **Сгенерированное повторение** (daily/monthly/odd_even) → `series_task_id` = id шаблона серии
+- **Кастомизированное событие** → как раньше, `series_task_id` из БД
+- **One-time** → `null`
+- **`GET /tasks/:id`** (шаблон, не occurrence) → `null`, как раньше
+
+221 тест проходит.
 

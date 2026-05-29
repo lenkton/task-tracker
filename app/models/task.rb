@@ -42,6 +42,10 @@ class Task < ApplicationRecord
     class_name.constantize
   end
 
+  def recurring?
+    self.class::RECURRING_STI_TYPES.include?(repetition_type)
+  end
+
   def api_repetition_type
     REPETITION_TYPE_CLASS_NAMES.key(self.class.name)
   end

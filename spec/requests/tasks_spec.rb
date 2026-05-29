@@ -42,6 +42,12 @@ RSpec.describe "Tasks API", type: :request do
 
         expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 4, 5 ])
       end
+
+      it "assigns series_task_id to generated recurring occurrences" do
+        standup_events = json.select { |item| item["name"] == "Daily standup" }
+
+        expect(standup_events.map { |item| item["series_task_id"] }).to all(eq(tasks(:daily_standup).id))
+      end
     end
 
     context "with statuses filter" do
@@ -370,6 +376,7 @@ RSpec.describe "Tasks API", type: :request do
       standup_events = json.select { |item| item["name"] == "Daily standup" }
 
       expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 5 ])
+      expect(standup_events.map { |item| item["series_task_id"] }).to all(eq(series.id))
     end
   end
 
