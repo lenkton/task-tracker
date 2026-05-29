@@ -12,6 +12,7 @@ class Task < ApplicationRecord
   class UnknownRepetitionType < StandardError; end
 
   belongs_to :status
+  belongs_to :user
   belongs_to :series_task, class_name: "Task", optional: true, inverse_of: :customized_occurrences
   has_many :customized_occurrences,
            -> { where(repetition_type: "Task::CustomizedEvent") },
