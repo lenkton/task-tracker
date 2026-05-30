@@ -9,6 +9,10 @@ class Task::CustomizedEvent < Task
 
   scope :for_series, ->(series_id) { where(series_task_id: series_id) }
 
+  def self.occurrence_slot(series_id, event_number)
+    unscoped.for_series(series_id).find_by(repetition_event_number: event_number)
+  end
+
   def self.for_series_and_event(series_id, event_number)
     for_series(series_id).find_by(repetition_event_number: event_number)
   end

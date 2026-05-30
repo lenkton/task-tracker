@@ -95,5 +95,21 @@ RSpec.describe Tasks::CustomizeOccurrence do
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }
     end
+
+    context "when the occurrence was deleted" do
+      before do
+        Tasks::Delete.call(task: series, event_number: 4)
+      end
+
+      subject(:result) do
+        described_class.call(
+          series:,
+          attributes: { repetition_event_number: 4, name: "Nope" }
+        )
+      end
+
+      it { expect(result).to be_failure }
+      it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }
+    end
   end
 end

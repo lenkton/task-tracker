@@ -39,13 +39,23 @@ class TasksController < ApplicationController
     if result.success?
       render json: TaskSerializer.call(result.value)
     else
-      render json: { errors: result.errors }, status: :unprocessable_entity
+      status = not_found_error?(result) ? :not_found : :unprocessable_entity
+      render json: { errors: result.errors }, status: status
     end
   end
 
   def destroy
-    @task.destroy!
-    head :no_content
+    result = Tasks::Delete.call(
+      task: @task,
+      event_number: params[:repetition_event_number]
+    )
+
+    if result.success?
+      head :no_content
+    else
+      status = not_found_error?(result) ? :not_found : :unprocessable_entity
+      render json: { errors: result.errors }, status: status
+    end
   end
 
   private
@@ -86,5 +96,11 @@ class TasksController < ApplicationController
 
   def filter_params
     params.permit(:scheduled_from, :scheduled_to, :statuses)
+  end
+
+  def not_found_error?(result)
+    result.errors.is_a?(Hash) &&
+      result.errors.key?(:repetition_event_number) &&
+      result.errors[:repetition_event_number].include?("does not exist for this series")
   end
 end

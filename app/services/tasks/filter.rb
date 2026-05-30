@@ -65,6 +65,7 @@ module Tasks
       return {} if series_ids.empty?
 
       Task::CustomizedEvent
+        .unscoped
         .where(series_task_id: series_ids)
         .pluck(:series_task_id, :repetition_event_number)
         .group_by(&:first)
@@ -79,7 +80,13 @@ module Tasks
       names = status_names
       return scope if names.empty?
 
-      scope.joins(:status).where(statuses: { name: names })
+      relation = names.include?(Status::DELETED_NAME) ? unscoped_user_tasks : scope
+      relation.joins(:status).where(statuses: { name: names })
+    end
+
+    def unscoped_user_tasks
+      user_id = @scope.reorder(nil).pick(:user_id)
+      Task.unscoped.where(user_id: user_id)
     end
 
     def status_names

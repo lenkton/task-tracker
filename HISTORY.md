@@ -1,886 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/30/2026 at 00:53:32 GMT+3 from Cursor (3.2.21)_
-
----
-
-**User**
-
-@spec/requests/tasks_spec.rb:9-11 сделай это хелпером (или как они тут называются в рспеке)
-
----
-
-**Cursor**
-
-Вынесу `json` в support-модуль и подключу его для request-спеков.
-
-
-В RSpec такие вещи обычно лежат в **`spec/support/`** — это support-файлы, которые подключаются из `rails_helper`.
-
-**`spec/support/json_response.rb`** — модуль-хелпер:
-
-```ruby
-module JsonResponse
-  def json
-    JSON.parse(response.body)
-  end
-end
-
-RSpec.configure do |config|
-  config.include JsonResponse, type: :request
-end
-```
-
-`config.include` подмешивает методы модуля в примеры с `type: :request` (для файлов в `spec/requests/` тип выводится через `infer_spec_type_from_file_location!`).
-
-В `rails_helper` раскомментирована автозагрузка support-файлов. В `tasks_spec.rb` локальный `def json` убран — `json` доступен как и раньше.
-
----
-
-**User**
-
-@spec/requests/tasks_spec.rb перепиши, чтобы в тестах был только 1 expect
-
----
-
-**Cursor**
-
-Спеки разбиты на отдельные примеры с одним `expect` в каждом. Общий запрос вынесен в `before`, для `POST`/`DELETE` с проверкой счётчика — отдельный `it` с блоком `change`.
-
-Было 8 примеров с несколькими `expect` → стало **24 примера**, все проходят. Структура:
-
-- **`before`** — один HTTP-запрос на группу
-- **`it { expect(...) }`** — одна проверка
-- **`context "after request"`** — ответ после запроса, когда нужен отдельный пример на `change`
-
----
-
-**User**
-
-@spec/requests/tasks_spec.rb:26-28 дай этому название
-
----
-
-**Cursor**
-
-Готово — пример теперь называется `"returns fixture task names"`.
-
----
-
-**User**
-
-@/home/sergey/.cursor/projects/home-sergey-code-ruby-task-tracker/terminals/1.txt:993-1013 поправь замечания рубокопа
-
----
-
-**Cursor**
-
-Упрощаю вложенность и переименовываю контексты под правила RuboCop.
-
-
-Сделано двумя изменениями:
-
-1. **Вложенность** — вместо `describe → context → context "after request"` отдельные `describe` на одном уровне, например `POST /tasks with valid params when submitted`.
-2. **ContextWording** — контексты переименованы в `when submitted` / `when deleted` (префиксы `when` / `with`).
-
-RuboCop без замечаний, все 26 примеров проходят.
-
----
-
-**User**
-
-не, я ревертнул.
-
-давай вот вложенность - увеличим лимит в .rubocop.yml, а навзания контекстов - как ты предложил
-
----
-
-**Cursor**
-
-Сделано:
-
-**`.rubocop.yml`** — лимит вложенности поднят до 4:
-
-```yaml
-RSpec/NestedGroups:
-  Max: 4
-```
-
-**`spec/requests/tasks_spec.rb`** — контексты переименованы:
-- `after request` → `when submitted` (POST)
-- `after request` → `when deleted` (DELETE)
-
-Структура спеков как была, RuboCop без замечаний.
-
----
-
-**User**
-
-слушай. а я бы хотел, чтобы для потребителя API выглядело так, что status - это enum (строка), а не объект. например, чтобы из ручки  tasks/:id возвращался объект с полем "status":"new"
-
-есть идеи, как это сделать?
-
----
-
-**Cursor**
-
-Посмотрю текущую реализацию API и модели, чтобы предложить конкретный вариант.
-
-
-Есть несколько нормальных путей, и все они совместимы с тем, что **в БД статус — отдельная таблица**, а **в API — строка**.
-
-## Рекомендуемый подход: отдельная API-сериализация
-
-Не трогать модель ради JSON, а вынести представление для API:
-
-```ruby
-# app/serializers/task_serializer.rb
-class TaskSerializer
-  def self.call(task)
-    {
-      id: task.id,
-      name: task.name,
-      description: task.description,
-      scheduled_at: task.scheduled_at,
-      status: task.status.name,
-      created_at: task.created_at,
-      updated_at: task.updated_at
-    }
-  end
-end
-```
-
-В контроллере:
-
-```ruby
-render json: TaskSerializer.call(task)
-render json: tasks.map { |t| TaskSerializer.call(t) }
-```
-
-**Плюсы:**
-- доменная модель остаётся `belongs_to :status`
-- API-контракт явный и стабильный
-- легко потом добавить i18n, скрыть поля, версионирование
-- пользовательские статусы просто отдаются как `"status": "my_custom_status"`
-
-**Минусы:** один маленький класс/метод.
-
----
-
-## Альтернатива попроще: хелпер в контроллере
-
-Если не хочется отдельного файла:
-
-```ruby
-def task_json(task)
-  task.as_json(except: :status_id).merge("status" => task.status.name)
-end
-```
-
-Подходит для маленького CRUD, но быстро разрастается.
-
----
-
-## Что не советую
-
-**Переопределять `Task#as_json`** — начнёт всплывать в логах, консоли, других местах, где JSON нужен «внутренний».
-
-**Rails enum в модели** — против вашего README: потеряете гибкость пользовательских статусов.
-
----
-
-## Запись: принимать `"status": "todo"`, а не `status_id`
-
-Сейчас в `task_params` — `status_id`. Для enum-like API лучше:
-
-**Запрос:**
-```json
-{ "task": { "name": "...", "status": "todo" } }
-```
-
-**В контроллере или модели:**
-```ruby
-def task_params
-  params.require(:task).permit(:name, :description, :scheduled_at, :status)
-end
-
-def assign_status!(task, status_name)
-  task.status = Status.find_by!(name: status_name)
-end
-```
-
-Или аккуратнее через virtual attribute в модели:
-
-```ruby
-attr_accessor :status_param
-
-before_validation :assign_status_from_param
-
-def assign_status_from_param
-  return if status_param.blank?
-  self.status = Status.find_by(name: status_param)
-  errors.add(:status, "is invalid") unless status
-end
-```
-
-Тогда `status_id` из API можно вообще убрать.
-
----
-
-## Итоговый контракт
-
-**GET `/tasks/1`:**
-```json
-{
-  "id": 1,
-  "name": "Review pull requests",
-  "description": "...",
-  "scheduled_at": "2026-05-24T10:00:00Z",
-  "status": "todo"
-}
-```
-
-**POST/PATCH:**
-```json
-{ "task": { "status": "in_progress" } }
-```
-
----
-
-## На будущее
-
-Когда появятся пользовательские статусы:
-- системные (`todo`, `done`) — фронт переводит по словарю
-- кастомные (`"status": "waiting_for_boss"`) — показываются как есть
-
-Таблица `statuses` + строка в API — как раз для этого.
-
----
-
-Если хочешь, могу сразу внедрить: `TaskSerializer`, смену `status_id` → `status` в params и обновление спеков.
-
----
-
-**User**
-
-так, да, давай добавим сериалайзеры для этой темы
-
----
-
-**Cursor**
-
-Добавляю `TaskSerializer`, обновляю контроллер и спеки под строковый `status`.
-
-
-Удаляю неиспользуемый `let(:status)`.
-
-
-Готово. API теперь отдаёт `status` как строку.
-
-### `TaskSerializer`
-
-```ruby
-{
-  id: ...,
-  name: ...,
-  description: ...,
-  scheduled_at: ...,
-  status: task.status.name,  # "todo", "in_progress", ...
-  created_at: ...,
-  updated_at: ...
-}
-```
-
-### Контроллер
-
-- все ответы идут через `TaskSerializer.call` / `.collection`
-- на вход принимается `"status": "todo"` вместо `status_id`
-- строка резолвится в `Status.find_by(name: ...)` в `task_attributes`
-
-### Пример ответа
-
-```json
-{
-  "id": 1,
-  "name": "Review pull requests",
-  "description": "...",
-  "scheduled_at": "2026-05-24T10:00:00.000Z",
-  "status": "todo",
-  "created_at": "...",
-  "updated_at": "..."
-}
-```
-
-### Запрос
-
-```json
-{
-  "task": {
-    "name": "Write tests",
-    "scheduled_at": "2026-05-26T09:00:00Z",
-    "status": "todo"
-  }
-}
-```
-
-Спеки обновлены, 26 примеров проходят. Если передать несуществующий статус — `belongs_to` вернёт ошибку валидации на `status`.
-
----
-
-**User**
-
-слушай, я там ревёртнул пока тему про аттрибуты (при обновлении/создании) поправь тесты
-
----
-
-**Cursor**
-
-Контроллер снова принимает `status_id` — обновляю тесты.
-
-
-Готово. В POST/PATCH-тестах снова `status_id`, а не строка `status`:
-
-- `valid_task_params` — `status_id: status.id`
-- `invalid_task_params` — то же самое
-
-Проверки ответа (`json["status"] == "todo"`) не трогал — сериалайзер по-прежнему отдаёт строку. Все 26 примеров проходят.
-
----
-
-**User**
-
-так, а вот насчёт записи я хочу по-другому: я хочу 1) чтобы не было этого верхнеуровнего параметра task, а все параметры в корне объекта передавали
-2) может быть эту трансляцию из "status":"new" в айдишник объекта проводить в сервисе?
-
----
-
-**Cursor**
-
-Изучаю текущую реализацию и добавлю сервис для записи без обёртки `task`.
-
-
-Готово. Запись теперь через корневые параметры и сервис `Tasks::Write`.
-
-### Запрос (POST/PATCH)
-
-```json
-{
-  "name": "Write tests",
-  "description": "Cover tasks API",
-  "scheduled_at": "2026-05-26T09:00:00Z",
-  "status": "todo"
-}
-```
-
-Обёртки `task` больше нет.
-
-### `Tasks::Write`
-
-- принимает `task` и `attributes` (хеш из params)
-- маппит `"status": "todo"` → `Status.find_by(name: ...)`
-- если статус не найден — ошибка `status: ["is invalid"]`
-- при PATCH поля, которых нет в запросе, не трогаются (в т.ч. `status`)
-
-### Контроллер
-
-```ruby
-params.permit(:name, :description, :scheduled_at, :status)
-Tasks::Write.call(task: ..., attributes: task_params)
-```
-
-Ответы по-прежнему через `TaskSerializer` со строковым `status`. Спеки обновлены, 26 примеров проходят.
-
----
-
-**User**
-
-слушай, а это общепринятая схема именования сервисов? обычно я видел, что называют типа CreateObjectService
-
----
-
-**Cursor**
-
-Единого стандарта нет — в Rails-сообществе живут несколько схем, и все считаются нормальными.
-
-### Что чаще встречается
-
-**1. `CreateTaskService` / `UpdateTaskService`**  
-Самый узнаваемый вариант, особенно в туториалах и «классических» Rails-проектах.
-
-**2. `Tasks::Create` / `Tasks::Update`**  
-Популярнее в более аккуратных кодовых базах: домен в namespace, действие — короткое имя класса.
-
-**3. `Tasks::Write` / `Tasks::Upsert`**  
-Тоже встречается, но реже — когда create и update почти одинаковые (как у вас сейчас).
-
----
-
-### Как обычно выбирают
-
-| Подход | Когда уместен |
-|--------|----------------|
-| `CreateTaskService` + `UpdateTaskService` | Разная логика создания и обновления |
-| `Tasks::Create` / `Tasks::Update` | Хочется короче и без суффикса `Service` |
-| `Tasks::Write` | Общая логика, один вход для create/update |
-
-Суффикс **`Service`** — не обязателен. Многие его убирают: `Tasks::Create` вместо `CreateTaskService`, потому что и так ясно, что это сервис-объект.
-
----
-
-### Что у вас сейчас
-
-`Tasks::Write` — нормальное имя для **общего** write-сервиса, но менее «привычное на слух», чем `CreateTaskService`.
-
-Если хочется ближе к тому, что ты обычно видел, логичный рефакторинг:
-
-```
-Tasks::Create   # Task.new + attributes
-Tasks::Update   # task + attributes
-```
-
-Общую логику (`status` → `Status`) можно вынести в `Tasks::Attributes` или private concern внутри обоих.
-
----
-
-**Итог:** `CreateObjectService` — более распространённая и читаемая схема для новичков и больших команд. `Tasks::Write` — ок, но чуть менее явная. Если планируешь, что create и update разойдутся по логике, лучше сразу разделить на `Create` / `Update`.
-
-Могу переименовать в `Tasks::Create` и `Tasks::Update` с общим модулем для резолва статуса — скажи, если хочешь.
-
----
-
-**User**
-
-добавь тест на неправильный статус
-
----
-
-**Cursor**
-
-Добавляю тесты на несуществующий статус в POST, по той же структуре, что и остальные примеры.
-
-
-Добавлен блок `POST /tasks with invalid status`:
-
-- не создаёт запись в БД
-- возвращает `422`
-- в `errors` есть ключ `"status"`
-
-Параметры — валидные, кроме `status: "nonexistent"`. Три новых примера проходят.
-
----
-
-**User**
-
-и на patch
-
----
-
-**Cursor**
-
-Добавлен блок `PATCH /tasks/:id with invalid status` — по той же схеме, что и для POST:
-
-- статус задачи не меняется
-- ответ `422`
-- в `errors` есть `"status"`
-
-6 примеров с `invalid status` проходят.
-
----
-
-**User**
-
-теперь надо реализовать фильтрацию: надо в index добавить фильтры по дате исполнения и статусам
-
----
-
-**Cursor**
-
-Добавляю сервис фильтрации и тесты по аналогии с `Tasks::Write`.
-
-
-Упрощаю контроллер — убираю двойной вызов фильтра.
-
-
-Исправляю сервис (ошибки и разбор `statuses`) и стабилизирую request-спеки через `subject!`.
-
-
-Конфликт имён: `subject!(:request)` перекрывает метод `request` в integration-спеках. Переименовываю.
-
-
-Добавляю хелпер `json_get` — в RSpec `get` с `params` и `as: :json` превращается в POST.
-
-
-Готово. Фильтрация в `GET /tasks` через `Tasks::Filter`.
-
-### Query-параметры
-
-| Параметр | Пример | Описание |
-|----------|--------|----------|
-| `statuses` | `todo` или `todo,in_progress` | один или несколько статусов (строки) |
-| `scheduled_from` | `2026-05-24` | задачи с `scheduled_at` ≥ начала дня |
-| `scheduled_to` | `2026-05-25` | задачи с `scheduled_at` ≤ конца дня |
-
-Пример:
-```
-GET /tasks?statuses=todo,in_progress&scheduled_from=2026-05-24&scheduled_to=2026-05-26
-```
-
-Для даты без времени используется весь день; с временем — точное значение.
-
-### Реализация
-
-- **`Tasks::Filter`** — фильтрация scope, ошибки при невалидной дате
-- **`TasksController#index`** — вызывает фильтр, при ошибке — `422`
-
-### Тесты
-
-- request-спеки на каждый фильтр и комбинацию
-- unit-спеки для `Tasks::Filter`
-- хелпер **`json_get`** — в RSpec `get` с `params` и `as: :json` уходит в POST, для GET с query нужен `Accept: application/json` в заголовке
-
-Все 49 примеров проходят.
-
----
-
-**User**
-
-@spec/support/json_request_helpers.rb зачем это надо?
-
----
-
-**Cursor**
-
-Это обходной путь из‑за особенности RSpec/Rails в request-спеках.
-
-### В чём проблема
-
-В RSpec такое сочетание:
-
-```ruby
-get tasks_path, params: { statuses: "todo" }, as: :json
-```
-
-**не делает GET с query-параметрами**, а отправляет **POST** на `/tasks` с телом `{"statuses":"todo"}`.
-
-Мы это как раз и поймали при отладке: `request.request_method` был `POST`, срабатывал `create`, `Tasks::Write` валидировал пустую задачу и отдавал 422 с ошибками `name` / `scheduled_at` / `status` — как будто фильтр сломан, хотя `Tasks::Filter` вообще не вызывался.
-
-Без параметров всё ок:
-
-```ruby
-get tasks_path, as: :json  # → GET
-```
-
-### Что делает хелпер
-
-```ruby
-def json_get(path, params: nil)
-  if params.present?
-    get path, params: params, headers: { "ACCEPT" => "application/json" }
-  else
-    get path, as: :json
-  end
-end
-```
-
-С параметрами — настоящий **GET** с `?statuses=todo&...` и заголовком `Accept: application/json`. Без параметров — как раньше, через `as: :json`.
-
-### Можно ли без него
-
-Да, в каждом тесте писать вручную:
-
-```ruby
-get tasks_path, params: { statuses: "todo" }, headers: { "ACCEPT" => "application/json" }
-```
-
-Хелпер просто прячет эту ловушку в одном месте, чтобы не наступать на неё снова в тестах фильтров.
-
-Если хочешь — могу убрать хелпер и заменить на явные `headers:` в спеках, или вынести это в комментарий в `tasks_spec.rb`.
-
----
-
-**User**
-
-та слушай, давай просто в тестах на GET будем убирать as: :json  и эта штука не понадобится
-
----
-
-**Cursor**
-
-Готово. У всех GET убран `as: :json`, `json_request_helpers.rb` удалён, подключение из `rails_helper` тоже.
-
-POST/PATCH/DELETE по-прежнему с `as: :json` — там он нужен для JSON-тела. Все 49 примеров проходят.
-
----
-
-**User**
-
-@/home/sergey/.cursor/projects/home-sergey-code-ruby-task-tracker/terminals/1.txt:278-285 исправь
-
----
-
-**Cursor**
-
-Во втором примере `call` не вызывался, поэтому `errors` пустой. Исправляю через `subject!`.
-
-
-Разбил на два примера в контексте `with invalid scheduled_from`: один проверяет `nil`, второй — ошибки (с предварительным `filter.call`, чтобы `errors` успел заполниться). RuboCop и тесты проходят.
-
----
-
-**User**
-
-@spec/services/tasks/filter_spec.rb добавь тест на  scheduled_to и на несколько параметров сразу
-
----
-
-**Cursor**
-
-Добавлены три примера:
-
-- **`scheduled_to`** — только «Review pull requests» (дата ≤ 2026-05-24)
-- **`statuses` + `scheduled_to`** — todo и дата до 24-го → одна задача
-- **`statuses` + `scheduled_from`** — in_progress и дата с 25-го → вторая фикстура
-
-Все 8 примеров в `filter_spec` проходят.
-
----
-
-**User**
-
-слушай. мне как-то не нравится эта тема с attr_reader :errors
-
-мне больше нравится подход, когда сервисы возвращают какой-то объект успеха/неуспеха
-
-может, так попробуем сделать?
-
----
-
-**Cursor**
-
-Изучаю сервисы и места их использования, чтобы ввести объект результата.
-
-
-Добавляю `ServiceResult` и перевожу `Filter` и `Write` на этот паттерн.
-
-
-Готово. Добавлен общий `ServiceResult`, оба сервиса и контроллер переведены на него.
-
-### `ServiceResult`
-
-```ruby
-ServiceResult.success(tasks)           # value — результат, errors — {}
-ServiceResult.failure(scheduled_from: ["is invalid"])  # value — nil
-# или ServiceResult.failure(task.errors)
-```
-
-- `success?` / `failure?`
-- `value` — полезная нагрузка при успехе
-- `errors` — хеш (из хеша или `ActiveModel::Errors`)
-
-### Использование в контроллере
-
-```ruby
-result = Tasks::Filter.call(scope: Task.all, filters: filter_params)
-
-if result.success?
-  render json: TaskSerializer.collection(result.value)
-else
-  render json: { errors: result.errors }, status: :unprocessable_entity
-end
-```
-
-То же для `Tasks::Write` в `create` / `update`.
-
-### Что убрано
-
-- `attr_reader :errors` у `Filter`
-- проверки `if tasks` / `task.persisted?` / `task.errors.empty?` в контроллере
-
-56 примеров проходят. Если понравится — можно вынести `render_service_result` в `ApplicationController`, но пока оставил явно в экшенах.
-
----
-
-**User**
-
-@db/migrate/20260524114941_create_tags.rb  накидай сидов для тегов: "отчетность”, “операции” и “звонок"
-
----
-
-**Cursor**
-
-В `db/seeds.rb` добавлены идемпотентные сиды для трёх тегов (во всех окружениях, как у статусов):
-
-```ruby
-%w[отчетность операции звонок].each do |tag_name|
-  Tag.find_or_create_by!(name: tag_name)
-end
-```
-
-Повторный `bin/rails db:seed` дубликаты не создаёт.
-
----
-
-**User**
-
-так, теперь надо запретить удаление из базы данных тегов: отчетность, операции, звонок. и запретить их изменение
-
----
-
-**Cursor**
-
-Добавляю защиту системных тегов в модели и тесты.
-
-
-Системные теги защищены в модели `Tag`.
-
-### `Tag::SYSTEM_NAMES`
-
-```ruby
-%w[отчетность операции звонок].freeze
-```
-
-Список один — и в сидах (`Tag::SYSTEM_NAMES.each`), и в проверках.
-
-### Поведение
-
-- **`before_update`** — системные теги нельзя менять (`update`/`save` возвращает `false`, в `errors[:base]` — `"system tags cannot be deleted"` / `"system tags cannot be modified"`)
-- **`before_destroy`** — системные теги нельзя удалить (запись остаётся в БД)
-
-Остальные теги по-прежнему можно редактировать и удалять.
-
-### Тесты
-
-`spec/models/tag_spec.rb` — 7 примеров на update/destroy для системных и обычных тегов.
-
----
-
-**User**
-
-так, а сейчас надо добавить API для создания/редактирования тегов. Давай 
-
----
-
-**Cursor**
-
-Изучаю текущую структуру API и модели тегов.
-
-
-Добавляю REST API для тегов по образцу tasks: сериалайзер, сервис записи, контроллер и request-спеки.
-
-
-Добавлен REST API для тегов по тем же принципам, что и у задач.
-
-### Эндпоинты
-
-| Метод | Путь | Действие |
-|-------|------|----------|
-| `GET` | `/tags` | список |
-| `GET` | `/tags/:id` | один тег |
-| `POST` | `/tags` | создать |
-| `PATCH` | `/tags/:id` | изменить |
-| `DELETE` | `/tags/:id` | удалить |
-
-### Тело запроса (корень, без обёртки)
-
-```json
-{ "name": "срочно" }
-```
-
-### Ответ
-
-```json
-{
-  "id": 1,
-  "name": "срочно",
-  "system": false,
-  "created_at": "...",
-  "updated_at": "..."
-}
-```
-
-`system: true` у «отчетность», «операции», «звонок» — чтобы клиент видел, что их нельзя менять/удалять.
-
-### Реализация
-
-- `TagSerializer` — сериализация
-- `Tags::Write` — create/update через `ServiceResult`
-- `TagsController` — экшены
-- защита системных тегов остаётся в модели (`422` с `errors.base`)
-
-### Примеры
-
-```bash
-curl -X POST http://localhost:3000/tags -H "Content-Type: application/json" -d '{"name":"срочно"}'
-curl -X PATCH http://localhost:3000/tags/4 -H "Content-Type: application/json" -d '{"name":"новое имя"}'
-```
-
-`spec/requests/tags_spec.rb` — 28 примеров, все проходят.
-
----
-
-**User**
-
-так, а теперь добавь для апихи задач тэги: надо отдавать в результатах список тегов полем, в котором будет лежать массив названий
-
-в запросах же надо принимать аналогичный параметр, в котором будет лежать массив названий тэгов
-
-и если в поле лежит неизвестное название, то надо создать тэг в базе
-
-ну и да, и наверное надо добавить миграцию, где накинем на название тега индекс, чтобы можно было проще искать по тэгу
-
----
-
-**Cursor**
-
-Добавляю теги в API задач. Уникальный индекс на `tags.name` уже есть — проверю, нужна ли отдельная миграция.
-
-
-Готово: в API задач добавлены теги.
-
-### Ответ
-
-В JSON задачи есть поле `tags` — массив строк с названиями (отсортирован по алфавиту):
-
-```json
-{
-  "id": 1,
-  "name": "...",
-  "status": "todo",
-  "tags": ["операции", "отчетность"],
-  ...
-}
-```
-
-### Запрос
-
-В `POST` / `PATCH` можно передать `tags` — массив названий:
-
-```json
-{
-  "name": "Задача",
-  "status": "todo",
-  "scheduled_at": "2026-05-25T10:00:00Z",
-  "tags": ["отчетность", "новый тег"]
-}
-```
-
-Неизвестные имена создаются через `Tag.find_or_create_by!`. Пустые строки отбрасываются, дубликаты убираются. При обновлении с полем `tags` список тегов задачи **заменяется** целиком.
-
-### Реализация
-
-- `TaskSerializer` — поле `tags`
-- `Tasks::Write` — присвоение тегов в транзакции после сохранения задачи
-- `TasksController` — `tags: []` в `permit`, `includes(:tags)` при загрузке
-- `Tasks::Filter` — `includes(:tags)` для списка
-
-### Миграция
-
-Отдельную миграцию не добавлял: уникальный индекс на `tags.name` уже есть в `create_tags` (`index_tags_on_name`).
-
-### Попутный фикс
-
-У join-таблицы `tags_tasks` нет первичного ключа, поэтому `dependent: :destroy` ломал удаление задач. Заменил на `dependent: :delete_all` в `Task` и `Tag`.
-
-105 примеров RSpec проходят.
+_Exported on 5/30/2026 at 16:02:55 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1946,4 +1065,256 @@ scheduled_at + (event_number - 1) * period.days
 Тесты на `10000` заменены на такой кейс (январский якорь 31-го → событие #2 в феврале).
 
 256 примеров проходят.
+
+---
+
+**User**
+
+так, а теперь давай переделаем удаление события.
+
+давай оно будет не удалять событие из базы, а будет помечать его, как отменённое.
+
+и таким образом будем удалять отдельные события серий событий: будем создавать кастомизированное со статусом "отменено"
+
+---
+
+**Cursor**
+
+Сначала посмотрю, как сейчас устроены удаление задач, кастомизированные события и статус «отменено».
+
+
+Добавлю сервис отмены, обновлю контроллер и фильтр — отменённые события по умолчанию не попадают в список.
+
+
+Готово. Удаление теперь — мягкая отмена, а не физическое удаление из БД.
+
+### Поведение `DELETE /tasks/:id`
+
+**Одноразовая задача** (или шаблон серии без `repetition_event_number`):
+- статус меняется на `cancelled`
+- запись остаётся в БД
+- ответ `200` с JSON задачи
+
+**Отдельное повторение серии** (`?repetition_event_number=N`):
+- создаётся/обновляется `Task::CustomizedEvent` со статусом `cancelled`
+- поля (имя, время и т.д.) берутся из серии, как при обычной кастомизации
+- сгенерированное повторение с этим номером больше не попадает в список
+
+```bash
+DELETE /tasks/3?repetition_event_number=4
+```
+
+### Список задач
+
+Отменённые события по умолчанию **не показываются** в `GET /tasks`. Чтобы их увидеть:
+
+```
+GET /tasks?scheduled_from=...&scheduled_to=...&statuses=cancelled
+```
+
+### Реализация
+
+- `Tasks::Cancel` — логика отмены (one-time / occurrence)
+- `Tasks::Filter` — исключает `cancelled`, если фильтр по статусам не задан
+- в фикстуры добавлен статус `cancelled`
+
+282 примера проходят.
+
+---
+
+**User**
+
+не, хотя, переименуй статус в deleted
+
+добавь его в сиды
+
+и обнови логику отдачи на фронт. добавь в дефолтный скоуп задач фильтр по статусам, и не включай туда удалённые
+
+---
+
+**Cursor**
+
+Переименую статус в `deleted`, добавлю его в сиды и настрою дефолтный scope, чтобы удалённые задачи не попадали в выдачу.
+
+
+Добавлю `default_scope`, переименую статус в `deleted` и поправлю места, где после «удаления» запись перестаёт находиться из‑за scope.
+
+
+Проблема: `default_scope` с `joins(:status)` ломает запросы с `includes`. Перехожу на фильтр по `status_id` без join.
+
+
+Тесты должны считать через `unscoped` — `default_scope` скрывает удалённые записи.
+
+
+Готово.
+
+### Статус `deleted`
+
+- Вместо `cancelled` — `deleted` в сидах, фикстурах и `Tasks::Cancel`
+- Константа `Status::DELETED_NAME = "deleted"`
+
+### Default scope на `Task`
+
+```ruby
+scope :excluding_deleted, -> { where.not(status_id: Status.where(name: Status::DELETED_NAME).select(:id)) }
+default_scope -> { excluding_deleted }
+```
+
+Фильтр по `status_id`, без `joins` — чтобы не ломать `includes` в Filter.
+
+### Выдача на фронт
+
+- **`GET /tasks`** — удалённые не попадают в ответ (default scope на `current_user.tasks`)
+- **`?statuses=deleted`** — показывает только удалённые (Filter временно снимает scope через `unscoped`)
+- **Сгенерированные повторения** — слоты с deleted-кастомизацией по-прежнему пропускаются (`CustomizedEvent.unscoped` в Filter)
+- **`DELETE`** — ответ со статусом `deleted`
+
+282 примера проходят.
+
+---
+
+**User**
+
+давай ещё запретим изменение/удаление этого состояния
+
+---
+
+**Cursor**
+
+Запрещу изменение и повторное удаление задач со статусом `deleted`. Сначала посмотрю, где это обрабатывается.
+
+
+Добавлю проверки в модель и сервисы: удалённые задачи нельзя менять, повторно удалять или выставлять статус `deleted` через PATCH.
+
+
+Блокировка `status: deleted` в `CustomizeOccurrence` ломала `Cancel`. Разрешу этот статус только при вызове из `Cancel`.
+
+
+Готово. Удалённые задачи (`status: deleted`) теперь защищены от изменений.
+
+### Что запрещено
+
+**Изменение** (`PATCH`):
+- Одноразовая удалённая задача — `404` (default scope)
+- Повторение серии, уже удалённое — `422` с `deleted tasks cannot be modified`
+- Установка `status: "deleted"` через PATCH — `422` с `status cannot be set to deleted`
+
+**Повторное удаление** (`DELETE`):
+- Уже удалённая one-time — `404`
+- Уже удалённое повторение — `422` с `deleted tasks cannot be modified`
+
+### Где реализовано
+
+- **`Task`** — валидация `must_not_be_deleted` при обновлении записи, которая уже была `deleted`
+- **`Tasks::Write`** / **`Tasks::CustomizeOccurrence`** — нельзя выставить `deleted` через PATCH (только через `DELETE`)
+- **`Tasks::Cancel`** — проверка перед удалением; для кастомизаций передаёт `cancel: true`, чтобы разрешить установку `deleted`
+
+292 примера проходят.
+
+---
+
+**User**
+
+блин, я больше имел в виду, чтоб из базы нельзя было удалить deleted код
+
+---
+
+**Cursor**
+
+Понял — нужно защитить сам статус `deleted` в таблице `statuses`, как системные теги. Посмотрю, как это сделано для тегов.
+
+
+Понял — речь про запись статуса `deleted` в таблице `statuses`, а не про блокировку PATCH у задач.
+
+В `Status` добавлена защита по тому же принципу, что у системных тегов:
+
+- **`before_update`** / **`before_destroy`** — для статусов из `PROTECTED_NAMES` (сейчас только `deleted`)
+- проверка по `name_in_database`, чтобы нельзя было переименовать и потом удалить
+- `spec/models/status_spec.rb` — 7 примеров, все проходят
+
+Остальные статусы (`todo`, `in_progress`, …) по-прежнему можно менять и удалять (если нет связанных задач из‑за `restrict_with_error`).
+
+Защиту задач от повторного PATCH после soft delete не трогал — она отдельная. Если её убрать и оставить только защиту строки в `statuses`, напиши.
+
+---
+
+**User**
+
+@app/services/tasks/cancel.rb переименуй эту штуку в delete
+
+---
+
+**Cursor**
+
+Переименовал сервис:
+
+- `Tasks::Cancel` → `Tasks::Delete` (`app/services/tasks/delete.rb`)
+- `spec/services/tasks/cancel_spec.rb` → `spec/services/tasks/delete_spec.rb`
+- В `CustomizeOccurrence` флаг `cancel:` → `delete:` (только для soft delete через этот сервис)
+- В контроллере: `Tasks::Delete.call`, `not_found_delete_error?`
+
+Файл `cancel.rb` удалён. Все 299 теста проходят.
+
+---
+
+**User**
+
+@app/models/task/customized_event.rb:13-14  зачем тут гnscoped
+
+---
+
+**Cursor**
+
+`unscoped` здесь из‑за `default_scope` на `Task`:
+
+```41:41:app/models/task.rb
+  default_scope -> { excluding_deleted }
+```
+
+Кастомизированное повторение после `DELETE` не удаляется из БД — у него меняется статус на `deleted`. С `default_scope` такая запись в обычном запросе не находится.
+
+`for_series_and_event` как раз должен находить **любую** кастомизацию слота — и живую, и уже soft-deleted. Иначе:
+
+1. **`Tasks::Delete`** — после удаления повторения lookup вернёт `nil`, и сервис попытается создать новую кастомизацию вместо ошибки «уже удалено».
+2. **`Tasks::CustomizeOccurrence`** — та же проблема: вместо обновления существующей записи попытается создать новую → конфликт по уникальному индексу `(series_task_id, repetition_event_number)`.
+3. **`Tasks::ResolveOccurrence`** — `GET /tasks/:id?repetition_event_number=N` не найдёт удалённую кастомизацию и вернёт сгенерированное повторение, как будто удаления не было.
+
+В `Filter` для пропуска слотов сделано то же самое — отдельный запрос с `.unscoped`, чтобы учитывать и удалённые кастомизации при генерации серии.
+
+Итого: `unscoped` снимает фильтр «скрыть deleted», потому что для кастомизированных событий deleted — это не «запись исчезла», а «слот занят пометкой об удалении».
+
+---
+
+**User**
+
+@app/services/tasks/customize_occurrence.rb слушай, а давай лучше делать вид, что софт делетед задач ваще не существует. то есть, мы  и в результате запроса на удаление ничего не будем возвращать, и если мы хотим обновить удалённую задачу, то 404, как будто ее нет
+
+---
+
+**Cursor**
+
+Перестроим поведение: soft-deleted задачи считаем несуществующими. Сначала посмотрю все места, где они сейчас обрабатываются.
+
+
+Вношу изменения: soft-deleted записи не находятся в обычных запросах, DELETE без тела, повторные операции — 404.
+
+
+Изменил поведение: soft-deleted задачи ведут себя как несуществующие.
+
+### Поведение API
+
+- **`DELETE /tasks/:id`** — `204 No Content`, без тела
+- **Повторный DELETE** — `404` (one-time не находится через `default_scope`, повторение серии — через `occurrence_slot`)
+- **`PATCH` удалённого повторения** — `404`, как будто слота нет
+- **`GET` удалённого повторения** — по-прежнему `404` (scoped lookup)
+
+### Код
+
+- **`for_series_and_event`** — без `unscoped`, находит только активные кастомизации
+- **`occurrence_slot`** — с `unscoped`, для проверки «tombstone» при delete/filter
+- **`CustomizeOccurrence`** — удалённый слот → `404`, при `delete: true` возвращает `success(nil)`
+- **`Delete`** — успех без value; повторное удаление → `404`
+- Из **`Task`** убрана валидация `must_not_be_deleted` — deleted-записи просто не попадают в scope
+
+`Filter` по-прежнему использует `unscoped` для пропуска удалённых слотов при генерации серии — это внутренняя логика, снаружи их не видно.
 

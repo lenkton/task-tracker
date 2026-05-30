@@ -440,18 +440,118 @@ RSpec.describe "Tasks API", type: :request do
   end
 
   describe "DELETE /tasks/:id" do
-    it "destroys a task" do
-      expect {
-        delete task_path(task), as: :json
-      }.to change(Task, :count).by(-1)
+    context "when deleting a one-time task" do
+      it "marks the task as deleted" do
+        expect {
+          delete task_path(task), as: :json
+        }.not_to change { Task.unscoped.count }
+      end
+
+      context "when submitted" do
+        before { delete task_path(task), as: :json }
+
+        it { expect(response).to have_http_status(:no_content) }
+        it { expect(response.body).to be_blank }
+
+        it "marks the task as deleted" do
+          expect(Task.unscoped.find(task.id).status.name).to eq("deleted")
+        end
+      end
     end
 
-    context "when deleted" do
-      before { delete task_path(task), as: :json }
+    context "when deleting a recurring occurrence" do
+      let(:series) { tasks(:daily_standup) }
+      let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+
+      subject!(:cancel_occurrence) do
+        delete task_path(series), params: { repetition_event_number: 4 }, as: :json
+      end
 
       it { expect(response).to have_http_status(:no_content) }
-      it { expect(response.body).to be_empty }
-      it { expect(Task.find_by(id: task.id)).to be_nil }
+      it { expect(response.body).to be_blank }
+
+      it "creates a deleted customized event" do
+        customized = Task::CustomizedEvent.occurrence_slot(series.id, 4)
+
+        expect(customized).to be_present
+        expect(customized.status.name).to eq("deleted")
+      end
+
+      it "does not remove the generated occurrence from the series template" do
+        expect(series.reload.status.name).to eq("todo")
+      end
+
+      it "excludes the occurrence from the task list" do
+        get tasks_path, params: interval_params
+
+        standup_events = json.select { |item| item["name"] == "Daily standup" }
+
+        expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 5 ])
+      end
+    end
+
+    context "when repetition_event_number does not exist for the series" do
+      let(:series) do
+        Task::Monthly.create!(
+          name: "Monthly report",
+          description: "",
+          scheduled_at: Time.zone.parse("2026-01-31 10:00:00"),
+          status: statuses(:todo),
+          user: users(:one),
+          repetition_data: { "day_of_month" => 31 },
+          repetition_event_number: 0
+        )
+      end
+
+      before { delete task_path(series), params: { repetition_event_number: 2 }, as: :json }
+
+      it { expect(response).to have_http_status(:not_found) }
+      it { expect(json["errors"]).to eq({ "repetition_event_number" => [ "does not exist for this series" ] }) }
+    end
+
+    context "when the occurrence is already deleted" do
+      let(:series) { tasks(:daily_standup) }
+
+      before do
+        delete task_path(series), params: { repetition_event_number: 4 }, as: :json
+        delete task_path(series), params: { repetition_event_number: 4 }, as: :json
+      end
+
+      it { expect(response).to have_http_status(:not_found) }
+      it { expect(json["errors"]).to eq({ "repetition_event_number" => [ "does not exist for this series" ] }) }
+    end
+
+    context "when the one-time task is already deleted" do
+      before do
+        delete task_path(task), as: :json
+        delete task_path(task), as: :json
+      end
+
+      it { expect(response).to have_http_status(:not_found) }
+    end
+  end
+
+  describe "PATCH /tasks/:id on deleted tasks" do
+    context "when setting status to deleted" do
+      before { patch task_path(task), params: { status: "deleted" }, as: :json }
+
+      it { expect(response).to have_http_status(:unprocessable_content) }
+      it { expect(json["errors"]).to eq({ "status" => [ "cannot be set to deleted" ] }) }
+      it { expect(task.reload.status.name).to eq("todo") }
+    end
+
+    context "when updating a deleted recurring occurrence" do
+      let(:series) { tasks(:daily_standup) }
+
+      before do
+        delete task_path(series), params: { repetition_event_number: 4 }, as: :json
+        patch task_path(series),
+              params: { repetition_event_number: 4, name: "Nope" },
+              as: :json
+      end
+
+      it { expect(response).to have_http_status(:not_found) }
+      it { expect(json["errors"]).to eq({ "repetition_event_number" => [ "does not exist for this series" ] }) }
     end
   end
 end

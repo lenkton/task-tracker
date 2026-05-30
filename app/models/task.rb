@@ -36,6 +36,13 @@ class Task < ApplicationRecord
   scope :one_time, -> { where(repetition_type: "Task::OneTime") }
   scope :recurring, -> { where(repetition_type: RECURRING_STI_TYPES) }
   scope :customized_events, -> { where(repetition_type: "Task::CustomizedEvent") }
+  scope :excluding_deleted, -> { where.not(status_id: Status.where(name: Status::DELETED_NAME).select(:id)) }
+
+  default_scope -> { excluding_deleted }
+
+  def deleted?
+    status&.name == Status::DELETED_NAME
+  end
 
   def self.class_for_api_type(api_type)
     class_name = REPETITION_TYPE_CLASS_NAMES.fetch(api_type) { raise UnknownRepetitionType }
@@ -80,4 +87,5 @@ class Task < ApplicationRecord
   def scheduled_at_for_event_number(_event_number)
     nil
   end
+
 end

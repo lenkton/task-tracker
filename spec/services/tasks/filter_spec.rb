@@ -58,6 +58,34 @@ RSpec.describe Tasks::Filter do
       it { expect(result.value.map { |occurrence| occurrence.task.name }).to contain_exactly("Review pull requests", "Daily standup", "Daily standup", "Daily standup") }
     end
 
+    context "when tasks are deleted" do
+      before { Tasks::Delete.call(task: tasks(:one)) }
+
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
+      it { expect(result.value.map { |occurrence| occurrence.task.name }).not_to include("Review pull requests") }
+
+      context "with deleted status filter" do
+        subject(:result) { described_class.call(scope: Task.all, filters: interval.merge(statuses: "deleted")) }
+
+        it { expect(result.value.map { |occurrence| occurrence.task.name }).to eq([ "Review pull requests" ]) }
+      end
+    end
+
+    context "when a recurring occurrence was deleted" do
+      let(:series) { tasks(:daily_standup) }
+
+      before { Tasks::Delete.call(task: series, event_number: 4) }
+
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
+      it "skips the generated occurrence with the same event number" do
+        standup_occurrences = result.value.select { |occurrence| occurrence.task.is_a?(Task::Daily) }
+
+        expect(standup_occurrences.map(&:event_number)).to eq([ 3, 5 ])
+      end
+    end
+
     context "with multiple statuses filter" do
       subject(:result) { described_class.call(scope: Task.all, filters: interval.merge(statuses: "todo,in_progress")) }
 

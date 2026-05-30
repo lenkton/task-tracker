@@ -1,13 +1,14 @@
 module Tasks
   class CustomizeOccurrence
-    def self.call(series:, attributes:)
-      new(series:, attributes:).call
+    def self.call(series:, attributes:, delete: false)
+      new(series:, attributes:, delete:).call
     end
 
-    def initialize(series:, attributes:)
+    def initialize(series:, attributes:, delete: false)
       @series = series
       @attributes = attributes.to_h.deep_symbolize_keys
       @event_number = @attributes[:repetition_event_number]&.to_i
+      @delete = delete
     end
 
     def call
@@ -15,7 +16,8 @@ module Tasks
       return failure(event_number_error) unless valid_event_number?
 
       customized = find_or_build_customized
-      return failure(customized.errors) if customized.errors.any?
+      return failure(customized.errors) if customized.is_a?(Task::CustomizedEvent) && customized.errors.any?
+      return failure(not_found_error) if customized.nil?
 
       apply_attributes(customized)
       save(customized)
@@ -39,13 +41,19 @@ module Tasks
       { repetition_event_number: [ "must be a positive integer" ] }
     end
 
+    def not_found_error
+      { repetition_event_number: [ "does not exist for this series" ] }
+    end
+
     def failure(errors)
       ServiceResult.failure(errors)
     end
 
     def find_or_build_customized
-      existing = Task::CustomizedEvent.for_series_and_event(@series.id, @event_number)
-      return existing if existing
+      slot = Task::CustomizedEvent.occurrence_slot(@series.id, @event_number)
+      return nil if slot&.deleted?
+
+      return slot if slot
 
       build_customized
     end
@@ -85,6 +93,11 @@ module Tasks
     def assign_status(task)
       return unless @attributes.key?(:status)
 
+      if @attributes[:status] == Status::DELETED_NAME && !@delete
+        task.errors.add(:status, "cannot be set to deleted")
+        return
+      end
+
       status = Status.find_by(name: @attributes[:status])
       if status
         task.status = status
@@ -115,6 +128,8 @@ module Tasks
       end
 
       if saved && task.errors.empty?
+        return ServiceResult.success(nil) if @delete
+
         ServiceResult.success(
           task.class.includes(:status, :tags, :series_task).find(task.id)
         )

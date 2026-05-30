@@ -6,3 +6,6 @@ in_progress:
 
 done:
   name: done
+
+deleted:
+  name: deleted

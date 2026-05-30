@@ -71,6 +71,11 @@ module Tasks
     def assign_status
       return unless @attributes.key?(:status)
 
+      if @attributes[:status] == Status::DELETED_NAME
+        @task.errors.add(:status, "cannot be set to deleted")
+        return
+      end
+
       status_name = @attributes[:status]
       status = Status.find_by(name: status_name)
 
