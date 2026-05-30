@@ -1,0 +1,636 @@
+openapi: 3.0.3
+info:
+  title: Task Tracker API
+  version: 1.0.0
+  description: |
+    JSON API для таск-трекера с поддержкой повторяющихся задач, тегов и Bearer-авторизации.
+
+    ## Авторизация
+
+    Все эндпоинты `/tasks` и `/tags` требуют заголовок `Authorization: Bearer <auth_token>`.
+    В development после `bin/rails db:seed` доступен токен `dev-token` для пользователя `dev@example.com`.
+
+    ## Статусы
+
+    В JSON поле `status` — строка с именем статуса (`todo`, `in_progress`, `done`, `deleted`).
+    Удаление задач — soft delete: запись остаётся в БД со статусом `deleted`, но в обычных
+    запросах не видна (как будто не существует). Повторный `DELETE` или `PATCH` удалённой
+    задачи возвращает `404`.
+
+    ## Повторяющиеся задачи
+
+    - `POST /tasks` создаёт **шаблон серии** (`repetition_event_number: 0` в ответе).
+    - `GET /tasks` разворачивает серии в отдельные **события** внутри интервала
+      `scheduled_from`…`scheduled_to`. У событий серии `repetition_event_number` ≥ 1;
+      якорное событие (#0) в списке не отдаётся.
+    - `GET/PATCH/DELETE /tasks/{id}?repetition_event_number=N` работают с конкретным событием серии.
+    - `PATCH` с `repetition_event_number` создаёт или обновляет кастомизацию слота.
+    - `DELETE` с `repetition_event_number` помечает слот удалённым (создаётся скрытая запись
+      `Task::CustomizedEvent` со статусом `deleted`).
+
+    ## Теги в задачах
+
+    Поле `tags` — массив строк. Неизвестные имена создаются автоматически.
+    При `PATCH` передача `tags` **заменяет** весь список тегов задачи.
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: Health
+  - name: Tasks
+  - name: Tags
+
+paths:
+  /up:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Проверка доступности приложения (Rails health check). Авторизация не требуется.
+      security: []
+      responses:
+        "200":
+          description: Приложение работает
+        "500":
+          description: Ошибка при загрузке
+
+  /tasks:
+    get:
+      tags: [Tasks]
+      summary: Список задач и событий в интервале
+      description: |
+        Возвращает одноразовые задачи, кастомизированные события серий и сгенерированные
+        вхождения повторяющихся шаблонов, попадающие в интервал.
+
+        Задачи со статусом `deleted` по умолчанию не включаются. Чтобы увидеть их,
+        передайте `statuses=deleted` (можно несколько через запятую: `todo,in_progress`).
+      parameters:
+        - $ref: "#/components/parameters/ScheduledFrom"
+        - $ref: "#/components/parameters/ScheduledTo"
+        - $ref: "#/components/parameters/Statuses"
+      responses:
+        "200":
+          description: Список событий, отсортированный по `scheduled_at`
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+              examples:
+                interval:
+                  summary: Интервал с one-time и recurring
+                  value:
+                    - id: 1
+                      name: Review pull requests
+                      description: Check open PRs
+                      scheduled_at: "2026-05-25T10:00:00.000Z"
+                      status: todo
+                      tags: ["отчетность", "операции"]
+                      repetition_type: one_time
+                      repetition_data: {}
+                      repetition_event_number: 0
+                      series_task_id: null
+                      user_id: 1
+                      created_at: "2026-05-24T10:00:00.000Z"
+                      updated_at: "2026-05-24T10:00:00.000Z"
+                    - id: 3
+                      name: Daily standup
+                      description: Team sync
+                      scheduled_at: "2026-05-26T09:00:00.000Z"
+                      status: todo
+                      tags: []
+                      repetition_type: daily
+                      repetition_data:
+                        period: 2
+                      repetition_event_number: 4
+                      series_task_id: 3
+                      user_id: 1
+                      created_at: "2026-05-20T09:00:00.000Z"
+                      updated_at: "2026-05-20T09:00:00.000Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+    post:
+      tags: [Tasks]
+      summary: Создать задачу или шаблон серии
+      description: |
+        Создаёт задачу от имени текущего пользователя. `repetition_event_number` при создании
+        не принимается — всегда сохраняется `0`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreate"
+            examples:
+              oneTime:
+                summary: Одноразовая задача
+                value:
+                  name: Write tests
+                  description: Cover tasks API
+                  scheduled_at: "2026-05-26T09:00:00Z"
+                  status: todo
+                  tags: ["отчетность"]
+              daily:
+                summary: Ежедневная серия (каждые 2 дня)
+                value:
+                  name: Daily standup
+                  scheduled_at: "2026-05-20T09:00:00Z"
+                  status: todo
+                  repetition_type: daily
+                  repetition_data:
+                    period: 2
+              monthly:
+                summary: Ежемесячная серия
+                value:
+                  name: Monthly report
+                  scheduled_at: "2026-04-15T10:00:00Z"
+                  status: todo
+                  repetition_type: monthly
+                  repetition_data:
+                    day_of_month: 15
+              oddEven:
+                summary: Чётные дни месяца
+                value:
+                  name: Even-day chore
+                  scheduled_at: "2026-05-24T09:00:00Z"
+                  status: todo
+                  repetition_type: odd_even
+                  repetition_data:
+                    parity: even
+      responses:
+        "201":
+          description: Задача создана
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+  /tasks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+
+    get:
+      tags: [Tasks]
+      summary: Получить задачу или событие серии
+      description: |
+        Без `repetition_event_number` возвращает запись из БД (шаблон one-time или recurring).
+
+        С `repetition_event_number` ≥ 1 возвращает сгенерированное или кастомизированное
+        вхождение серии. Для кастомизированных событий `id` совпадает с id серии.
+      parameters:
+        - $ref: "#/components/parameters/RepetitionEventNumberQuery"
+      responses:
+        "200":
+          description: Задача или событие
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    patch:
+      tags: [Tasks]
+      summary: Обновить задачу, шаблон серии или событие серии
+      description: |
+        - Без `repetition_event_number` — обновляет запись по `id` (one-time или шаблон серии).
+        - С `repetition_event_number` ≥ 1 — создаёт или обновляет кастомизацию слота серии;
+          шаблон серии не меняется.
+
+        Статус `deleted` через `PATCH` установить нельзя — используйте `DELETE`.
+      parameters:
+        - $ref: "#/components/parameters/RepetitionEventNumberQuery"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+            examples:
+              updateTask:
+                summary: Обновить one-time задачу
+                value:
+                  name: Updated task name
+              updateSeries:
+                summary: Обновить шаблон серии
+                value:
+                  name: Updated standup series
+              customizeOccurrence:
+                summary: Кастомизировать событие серии
+                value:
+                  repetition_event_number: 4
+                  name: Custom standup
+                  scheduled_at: "2026-05-26T10:30:00Z"
+                  status: in_progress
+                  tags: ["звонок"]
+      responses:
+        "200":
+          description: Обновлённая задача или событие
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+    delete:
+      tags: [Tasks]
+      summary: Удалить задачу или событие серии (soft delete)
+      description: |
+        - Без `repetition_event_number` — помечает one-time задачу или весь шаблон серии удалённым.
+        - С `repetition_event_number` ≥ 1 — помечает конкретный слот серии удалённым.
+
+        Успешный ответ без тела. Повторное удаление или обращение к уже удалённой записи — `404`.
+      parameters:
+        - $ref: "#/components/parameters/RepetitionEventNumberQuery"
+      responses:
+        "204":
+          description: Удалено
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+  /tags:
+    get:
+      tags: [Tags]
+      summary: Список тегов
+      responses:
+        "200":
+          description: Все теги
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags: [Tags]
+      summary: Создать тег
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "201":
+          description: Тег создан
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+  /tags/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+
+    get:
+      tags: [Tags]
+      summary: Получить тег
+      responses:
+        "200":
+          description: Тег
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Тег не найден
+
+    patch:
+      tags: [Tags]
+      summary: Обновить тег
+      description: Системные теги (`отчетность`, `операции`, `звонок`) изменить нельзя.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TagInput"
+      responses:
+        "200":
+          description: Тег обновлён
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tag"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Тег не найден
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+    delete:
+      tags: [Tags]
+      summary: Удалить тег
+      description: Системные теги удалить нельзя. Тег с привязанными задачами удаляется вместе со связями.
+      responses:
+        "204":
+          description: Тег удалён
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          description: Тег не найден
+        "422":
+          $ref: "#/components/responses/ValidationErrors"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Токен пользователя из поля `auth_token`
+
+  parameters:
+    TaskId:
+      name: id
+      in: path
+      required: true
+      description: Id задачи или id шаблона серии
+      schema:
+        type: integer
+
+    ScheduledFrom:
+      name: scheduled_from
+      in: query
+      required: true
+      description: |
+        Начало интервала (обязательно). ISO 8601 datetime или дата `YYYY-MM-DD`
+        (для даты — начало дня в timezone приложения).
+      schema:
+        type: string
+      example: "2026-05-24"
+
+    ScheduledTo:
+      name: scheduled_to
+      in: query
+      required: true
+      description: |
+        Конец интервала (обязательно). ISO 8601 datetime или дата `YYYY-MM-DD`
+        (для даты — конец дня в timezone приложения).
+      schema:
+        type: string
+      example: "2026-05-28"
+
+    Statuses:
+      name: statuses
+      in: query
+      required: false
+      description: |
+        Фильтр по статусам через запятую, например `todo` или `todo,in_progress`.
+        Чтобы включить soft-deleted записи, укажите `deleted`.
+      schema:
+        type: string
+      example: todo
+
+    RepetitionEventNumberQuery:
+      name: repetition_event_number
+      in: query
+      required: false
+      description: |
+        Номер события в серии (≥ 1). Для `GET` — получить вхождение; для `PATCH` — изменить слот;
+        для `DELETE` — удалить слот. В теле `PATCH` можно передать то же поле вместо query.
+      schema:
+        type: integer
+        minimum: 1
+
+  schemas:
+    Task:
+      type: object
+      required:
+        - id
+        - name
+        - description
+        - scheduled_at
+        - status
+        - tags
+        - repetition_type
+        - repetition_data
+        - repetition_event_number
+        - series_task_id
+        - user_id
+        - created_at
+        - updated_at
+      properties:
+        id:
+          type: integer
+          description: Id записи в БД или id серии для кастомизированных/сгенерированных событий
+        name:
+          type: string
+        description:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          description: Имя статуса
+          enum: [todo, in_progress, done, deleted]
+        tags:
+          type: array
+          items:
+            type: string
+          description: Названия тегов, отсортированные по алфавиту
+        repetition_type:
+          $ref: "#/components/schemas/RepetitionType"
+        repetition_data:
+          $ref: "#/components/schemas/RepetitionData"
+        repetition_event_number:
+          type: integer
+          minimum: 0
+          description: |
+            `0` — шаблон в БД или one-time задача; ≥ 1 — событие серии в списке/ответе
+        series_task_id:
+          type: integer
+          nullable: true
+          description: Id шаблона серии для recurring-событий; `null` для one-time
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TaskCreate:
+      type: object
+      required: [name, scheduled_at]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          default: ""
+        scheduled_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          default: todo
+          description: Имя статуса; по умолчанию у новой записи — `todo`
+        tags:
+          type: array
+          items:
+            type: string
+        repetition_type:
+          $ref: "#/components/schemas/RepetitionTypeCreate"
+        repetition_data:
+          $ref: "#/components/schemas/RepetitionData"
+
+    TaskUpdate:
+      type: object
+      description: Все поля опциональны; передаются только изменяемые
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        scheduled_at:
+          type: string
+          format: date-time
+        status:
+          type: string
+          description: Нельзя установить `deleted` — используйте DELETE
+        tags:
+          type: array
+          items:
+            type: string
+          description: Заменяет весь список тегов задачи
+        repetition_event_number:
+          type: integer
+          minimum: 1
+          description: Если указан — операция над событием серии, а не над шаблоном
+
+    Tag:
+      type: object
+      required: [id, name, system, created_at, updated_at]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        system:
+          type: boolean
+          description: "`true` для системных тегов, которые нельзя менять/удалять"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TagInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+
+    RepetitionType:
+      type: string
+      enum: [one_time, daily, monthly, odd_even]
+      description: |
+        В ответах `customized_event` не используется — кастомизации отдаются с типом серии.
+
+    RepetitionTypeCreate:
+      type: string
+      default: one_time
+      enum: [one_time, daily, monthly, odd_even]
+
+    RepetitionData:
+      type: object
+      description: |
+        Формат зависит от `repetition_type`:
+        - `one_time` — `{}`
+        - `daily` — `{ "period": <positive integer> }`
+        - `monthly` — `{ "day_of_month": 1..31 }`
+        - `odd_even` — `{ "parity": "even" | "odd" }`
+      additionalProperties: true
+
+    ValidationErrors:
+      type: object
+      required: [errors]
+      properties:
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+          description: Ошибки по именам полей
+          example:
+            name: ["can't be blank"]
+            scheduled_at: ["can't be blank"]
+
+    UnauthorizedError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          example: Unauthorized
+
+  responses:
+    Unauthorized:
+      description: Отсутствует или неверный Bearer-токен
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/UnauthorizedError"
+
+    ValidationErrors:
+      description: Ошибка валидации
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrors"
+
+    NotFound:
+      description: Ресурс не найден или недоступен текущему пользователю
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ValidationErrors"
+          examples:
+            missingOccurrence:
+              summary: Нет такого события серии
+              value:
+                errors:
+                  repetition_event_number:
+                    - does not exist for this series
+
+security:
+  - bearerAuth: []

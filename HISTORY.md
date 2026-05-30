@@ -1,5 +1,5 @@
 # Seeds for create statuses migration
-_Exported on 5/30/2026 at 16:02:55 GMT+3 from Cursor (3.2.21)_
+_Exported on 5/30/2026 at 16:10:36 GMT+3 from Cursor (3.2.21)_
 
 ---
 
@@ -1317,4 +1317,44 @@ default_scope -> { excluding_deleted }
 - Из **`Task`** убрана валидация `must_not_be_deleted` — deleted-записи просто не попадают в scope
 
 `Filter` по-прежнему использует `unscoped` для пропуска удалённых слотов при генерации серии — это внутренняя логика, снаружи их не видно.
+
+---
+
+**User**
+
+напиши openapi для этого проекта
+
+---
+
+**Cursor**
+
+Сначала соберу все эндпоинты, форматы запросов/ответов и авторизацию из кода.
+
+
+Пишу OpenAPI 3.0 по фактическому поведению API из контроллеров и спеков.
+
+
+Добавил спецификацию OpenAPI 3.0 в [`openapi.yaml`](openapi.yaml).
+
+### Что внутри
+
+- **Health** — `GET /up` (без авторизации)
+- **Tasks** — CRUD + развёрнутый список, серии, кастомизации, soft delete
+- **Tags** — CRUD, системные теги
+- **Bearer auth** — для `/tasks` и `/tags`
+- **Схемы** — `Task`, `TaskCreate`, `TaskUpdate`, `Tag`, ошибки валидации
+- **Описания** — повторения, `repetition_event_number`, soft delete, теги, фильтр `statuses=deleted`
+
+### Посмотреть
+
+- [Swagger Editor](https://editor.swagger.io/) — вставить содержимое файла
+- Redoc / Swagger UI — смонтировать файл локально
+- VS Code — расширение «OpenAPI (Swagger) Editor»
+
+Пример запроса из спеки:
+
+```bash
+curl -H "Authorization: Bearer dev-token" \
+  "http://localhost:3000/tasks?scheduled_from=2026-05-24&scheduled_to=2026-05-28"
+```
 
