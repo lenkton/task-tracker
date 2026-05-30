@@ -16,6 +16,8 @@ RSpec.describe Tasks::ResolveOccurrence do
     end
 
     context "when a customized occurrence exists" do
+      subject(:result) { described_class.call(series:, event_number: 4) }
+
       before do
         Tasks::CustomizeOccurrence.call(
           series:,
@@ -23,7 +25,6 @@ RSpec.describe Tasks::ResolveOccurrence do
         )
       end
 
-      subject(:result) { described_class.call(series:, event_number: 4) }
 
       it { expect(result).to be_success }
       it { expect(result.value).to be_a(Task::CustomizedEvent) }
@@ -31,6 +32,8 @@ RSpec.describe Tasks::ResolveOccurrence do
     end
 
     context "when the event number does not exist" do
+      subject(:result) { described_class.call(series:, event_number: 2) }
+
       let(:series) do
         Task::Monthly.create!(
           name: "Monthly report",
@@ -43,7 +46,6 @@ RSpec.describe Tasks::ResolveOccurrence do
         )
       end
 
-      subject(:result) { described_class.call(series:, event_number: 2) }
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }

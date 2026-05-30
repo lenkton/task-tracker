@@ -302,8 +302,6 @@ RSpec.describe Task do
   end
 
   describe Task::CustomizedEvent do
-    let(:series) { tasks(:daily_standup) }
-
     subject(:task) do
       described_class.new(
         base_attributes.merge(
@@ -313,6 +311,9 @@ RSpec.describe Task do
         )
       )
     end
+
+    let(:series) { tasks(:daily_standup) }
+
 
     it { expect(task).to be_valid }
 

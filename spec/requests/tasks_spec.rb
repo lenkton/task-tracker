@@ -316,13 +316,14 @@ RSpec.describe "Tasks API", type: :request do
     end
 
     context "when customizing a recurring occurrence" do
-      let(:series) { tasks(:daily_standup) }
-
       subject!(:customize_occurrence) do
         patch task_path(series),
               params: { repetition_event_number: 4, name: "Custom standup" },
               as: :json
       end
+
+      let(:series) { tasks(:daily_standup) }
+
 
       it { expect(response).to have_http_status(:ok) }
       it { expect(json["id"]).to eq(series.id) }
@@ -460,12 +461,13 @@ RSpec.describe "Tasks API", type: :request do
     end
 
     context "when deleting a recurring occurrence" do
-      let(:series) { tasks(:daily_standup) }
-      let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
-
       subject!(:cancel_occurrence) do
         delete task_path(series), params: { repetition_event_number: 4 }, as: :json
       end
+
+      let(:series) { tasks(:daily_standup) }
+      let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+
 
       it { expect(response).to have_http_status(:no_content) }
       it { expect(response.body).to be_blank }

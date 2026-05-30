@@ -23,6 +23,8 @@ RSpec.describe Tasks::Filter do
     end
 
     context "when a recurring occurrence was customized" do
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
       let(:series) { tasks(:daily_standup) }
 
       before do
@@ -36,7 +38,6 @@ RSpec.describe Tasks::Filter do
         )
       end
 
-      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
 
       it "returns the customized event with its series event number" do
         customized = result.value.find { |occurrence| occurrence.task.name == "Custom standup" }
@@ -59,9 +60,10 @@ RSpec.describe Tasks::Filter do
     end
 
     context "when tasks are deleted" do
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
       before { Tasks::Delete.call(task: tasks(:one)) }
 
-      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
 
       it { expect(result.value.map { |occurrence| occurrence.task.name }).not_to include("Review pull requests") }
 
@@ -73,11 +75,12 @@ RSpec.describe Tasks::Filter do
     end
 
     context "when a recurring occurrence was deleted" do
+      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
+
       let(:series) { tasks(:daily_standup) }
 
       before { Tasks::Delete.call(task: series, event_number: 4) }
 
-      subject(:result) { described_class.call(scope: Task.all, filters: interval) }
 
       it "skips the generated occurrence with the same event number" do
         standup_occurrences = result.value.select { |occurrence| occurrence.task.is_a?(Task::Daily) }

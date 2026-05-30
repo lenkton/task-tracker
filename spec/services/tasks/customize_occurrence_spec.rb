@@ -28,6 +28,13 @@ RSpec.describe Tasks::CustomizeOccurrence do
     end
 
     context "when updating an existing customized occurrence" do
+      subject(:result) do
+        described_class.call(
+          series:,
+          attributes: { repetition_event_number: 4, name: "Standup rescheduled", status: "in_progress" }
+        )
+      end
+
       let!(:customized) do
         described_class.call(
           series:,
@@ -35,12 +42,6 @@ RSpec.describe Tasks::CustomizeOccurrence do
         ).value
       end
 
-      subject(:result) do
-        described_class.call(
-          series:,
-          attributes: { repetition_event_number: 4, name: "Standup rescheduled", status: "in_progress" }
-        )
-      end
 
       it { expect(result).to be_success }
       it { expect(result.value.id).to eq(customized.id) }
@@ -73,6 +74,13 @@ RSpec.describe Tasks::CustomizeOccurrence do
     end
 
     context "when repetition_event_number does not exist for the series" do
+      subject(:result) do
+        described_class.call(
+          series:,
+          attributes: { repetition_event_number: 2, name: "Nope" }
+        )
+      end
+
       let(:series) do
         Task::Monthly.create!(
           name: "Monthly report",
@@ -85,28 +93,23 @@ RSpec.describe Tasks::CustomizeOccurrence do
         )
       end
 
-      subject(:result) do
-        described_class.call(
-          series:,
-          attributes: { repetition_event_number: 2, name: "Nope" }
-        )
-      end
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }
     end
 
     context "when the occurrence was deleted" do
-      before do
-        Tasks::Delete.call(task: series, event_number: 4)
-      end
-
       subject(:result) do
         described_class.call(
           series:,
           attributes: { repetition_event_number: 4, name: "Nope" }
         )
       end
+
+      before do
+        Tasks::Delete.call(task: series, event_number: 4)
+      end
+
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }

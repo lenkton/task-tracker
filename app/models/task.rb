@@ -87,5 +87,4 @@ class Task < ApplicationRecord
   def scheduled_at_for_event_number(_event_number)
     nil
   end
-
 end

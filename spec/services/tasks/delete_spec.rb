@@ -19,11 +19,12 @@ RSpec.describe Tasks::Delete do
     end
 
     context "when deleting a recurring occurrence" do
-      let(:series) { tasks(:daily_standup) }
-
       subject(:result) do
         described_class.call(task: series, event_number: 4)
       end
+
+      let(:series) { tasks(:daily_standup) }
+
 
       it { expect(result).to be_success }
       it { expect(result.value).to be_nil }
@@ -39,6 +40,8 @@ RSpec.describe Tasks::Delete do
     end
 
     context "when deleting an already customized occurrence" do
+      subject(:result) { described_class.call(task: series, event_number: 4) }
+
       let(:series) { tasks(:daily_standup) }
 
       before do
@@ -48,7 +51,6 @@ RSpec.describe Tasks::Delete do
         )
       end
 
-      subject(:result) { described_class.call(task: series, event_number: 4) }
 
       it { expect(result).to be_success }
       it { expect { result }.not_to change { Task::CustomizedEvent.unscoped.count } }
@@ -64,6 +66,8 @@ RSpec.describe Tasks::Delete do
     end
 
     context "when the occurrence does not exist" do
+      subject(:result) { described_class.call(task: series, event_number: 2) }
+
       let(:series) do
         Task::Monthly.create!(
           name: "Monthly report",
@@ -76,20 +80,20 @@ RSpec.describe Tasks::Delete do
         )
       end
 
-      subject(:result) { described_class.call(task: series, event_number: 2) }
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }
     end
 
     context "when the occurrence is already deleted" do
+      subject(:result) { described_class.call(task: series, event_number: 4) }
+
       let(:series) { tasks(:daily_standup) }
 
       before do
         described_class.call(task: series, event_number: 4)
       end
 
-      subject(:result) { described_class.call(task: series, event_number: 4) }
 
       it { expect(result).to be_failure }
       it { expect(result.errors).to eq({ repetition_event_number: [ "does not exist for this series" ] }) }

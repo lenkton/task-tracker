@@ -32,9 +32,9 @@ class TasksController < ApplicationController
   def update
     result = if customize_occurrence?
                Tasks::CustomizeOccurrence.call(series: @task, attributes: task_params)
-             else
+    else
                Tasks::Write.call(task: @task, attributes: task_params)
-             end
+    end
 
     if result.success?
       render json: TaskSerializer.call(result.value)
