@@ -24,25 +24,27 @@ RSpec.describe Tasks::Delete do
       end
 
       let(:series) { tasks(:daily_standup) }
+      let(:customized) do
+        result
+        Task::CustomizedEvent.occurrence_slot(series.id, 4)
+      end
 
 
       it { expect(result).to be_success }
       it { expect(result.value).to be_nil }
 
-      it "creates a deleted customized event" do
-        result
-
-        customized = Task::CustomizedEvent.occurrence_slot(series.id, 4)
-
-        expect(customized).to be_present
-        expect(customized.status.name).to eq("deleted")
-      end
+      it { expect(customized).to be_present }
+      it { expect(customized.status.name).to eq("deleted") }
     end
 
     context "when deleting an already customized occurrence" do
       subject(:result) { described_class.call(task: series, event_number: 4) }
 
       let(:series) { tasks(:daily_standup) }
+      let(:customized) do
+        result
+        Task::CustomizedEvent.occurrence_slot(series.id, 4)
+      end
 
       before do
         Tasks::CustomizeOccurrence.call(
@@ -55,14 +57,8 @@ RSpec.describe Tasks::Delete do
       it { expect(result).to be_success }
       it { expect { result }.not_to change { Task::CustomizedEvent.unscoped.count } }
 
-      it "marks the customized event as deleted" do
-        result
-
-        customized = Task::CustomizedEvent.occurrence_slot(series.id, 4)
-
-        expect(customized.name).to eq("Custom standup")
-        expect(customized.status.name).to eq("deleted")
-      end
+      it { expect(customized.name).to eq("Custom standup") }
+      it { expect(customized.status.name).to eq("deleted") }
     end
 
     context "when the occurrence does not exist" do

@@ -3,6 +3,9 @@ inherit_gem: { rubocop-rails-omakase: rubocop.yml }
 
 plugins: rubocop-rspec
 
+AllCops:
+  NewCops: enable
+
 # Overwrite or add rules to create your own house style
 #
 # # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
@@ -11,3 +14,9 @@ plugins: rubocop-rspec
 
 RSpec/NestedGroups:
   Max: 4
+
+RSpec/MultipleMemoizedHelpers:
+  Max: 8
+
+RSpec/ExampleLength:
+  Max: 15

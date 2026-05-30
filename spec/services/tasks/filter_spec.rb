@@ -26,6 +26,7 @@ RSpec.describe Tasks::Filter do
       subject(:result) { described_class.call(scope: Task.all, filters: interval) }
 
       let(:series) { tasks(:daily_standup) }
+      let(:customized) { result.value.find { |occurrence| occurrence.task.name == "Custom standup" } }
 
       before do
         Tasks::CustomizeOccurrence.call(
@@ -38,13 +39,8 @@ RSpec.describe Tasks::Filter do
         )
       end
 
-
-      it "returns the customized event with its series event number" do
-        customized = result.value.find { |occurrence| occurrence.task.name == "Custom standup" }
-
-        expect(customized.event_number).to eq(4)
-        expect(customized.scheduled_at).to eq(Time.zone.parse("2026-05-26 10:30:00"))
-      end
+      it { expect(customized.event_number).to eq(4) }
+      it { expect(customized.scheduled_at).to eq(Time.zone.parse("2026-05-26 10:30:00")) }
 
       it "skips the generated occurrence with the same event number" do
         standup_occurrences = result.value.select { |occurrence| occurrence.task.is_a?(Task::Daily) }

@@ -33,7 +33,7 @@ RSpec.describe Status do
     end
 
     it "allows destroying when no tasks reference it" do
-      status = Status.create!(name: "temporary")
+      status = described_class.create!(name: "temporary")
 
       expect { status.destroy }.to change(described_class, :count).by(-1)
     end

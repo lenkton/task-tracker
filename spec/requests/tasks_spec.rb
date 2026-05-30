@@ -412,6 +412,7 @@ RSpec.describe "Tasks API", type: :request do
   describe "GET /tasks with customized occurrences" do
     let(:series) { tasks(:daily_standup) }
     let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+    let(:standup_events) { json.select { |item| item["name"] == "Daily standup" } }
 
     before do
       patch task_path(series),
@@ -432,12 +433,8 @@ RSpec.describe "Tasks API", type: :request do
       )
     end
 
-    it "does not return the generated occurrence for the same event number" do
-      standup_events = json.select { |item| item["name"] == "Daily standup" }
-
-      expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 5 ])
-      expect(standup_events.map { |item| item["series_task_id"] }).to all(eq(series.id))
-    end
+    it { expect(standup_events.map { |item| item["repetition_event_number"] }).to eq([ 3, 5 ]) }
+    it { expect(standup_events.map { |item| item["series_task_id"] }).to all(eq(series.id)) }
   end
 
   describe "DELETE /tasks/:id" do
@@ -467,17 +464,14 @@ RSpec.describe "Tasks API", type: :request do
 
       let(:series) { tasks(:daily_standup) }
       let(:interval_params) { { scheduled_from: "2026-05-24", scheduled_to: "2026-05-28" } }
+      let(:customized) { Task::CustomizedEvent.occurrence_slot(series.id, 4) }
 
 
       it { expect(response).to have_http_status(:no_content) }
       it { expect(response.body).to be_blank }
 
-      it "creates a deleted customized event" do
-        customized = Task::CustomizedEvent.occurrence_slot(series.id, 4)
-
-        expect(customized).to be_present
-        expect(customized.status.name).to eq("deleted")
-      end
+      it { expect(customized).to be_present }
+      it { expect(customized.status.name).to eq("deleted") }
 
       it "does not remove the generated occurrence from the series template" do
         expect(series.reload.status.name).to eq("todo")
