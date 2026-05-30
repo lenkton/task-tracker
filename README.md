@@ -1,27 +1,54 @@
-# README
+# Task Tracker
+
+JSON API для таск-трекера: задачи с датой, статусом и тегами; одноразовые и повторяющиеся события; Bearer-авторизация. Спецификация API — [`docs/openapi.yaml`](docs/openapi.yaml).
 
 ## Запуск
 
-1. Заполните `.env` и `.postgres.env`.
-   Можно скопировать данные из `.env.example` и `.postgres.env.example`, но для прода пароли лучше поменять!
-2. `docker compose up`
-3. Сервер будет доступен на `localhost:3000`
+1. Заполните `.env` и `.postgres.env` (можно скопировать из `.env.example` и `.postgres.env.example`; для прода пароли лучше сменить).
+
+2. Поднимите контейнеры:
+
+   ```bash
+   docker compose up -d
+   ```
+
+3. Создайте пользователя и получите токен:
+
+   ```bash
+   docker compose exec app ./bin/rails c
+   ```
+
+   ```ruby
+   User.create!(email: "test@test.test", name: "Test")
+   User.last.auth_token
+   ```
+
+   В development после `bin/rails db:seed` также доступны `dev@example.com` и токен `dev-token`.
+
+4. API: http://localhost:3000
+
+5. Импортируйте [`docs/openapi.yaml`](docs/openapi.yaml) в Postman и укажите Bearer-токен в Authorization.
+
+6. Готово — можно тестировать.
 
 ## Тесты
 
 В проекте используется RSpec.
 
-### Запуск
+Запустить PostgreSQL:
 
-Запустить постгрес:
 ```bash
-docker compose -f compose.dev.yml up
+docker compose -f compose.dev.yml up -d
 ```
+
 Создать базу данных:
+
 ```bash
 bundle exec rails db:create db:migrate
 ```
+
 Прогнать тесты:
+
 ```bash
 bundle exec rspec
 ```
